@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# Jupyter kernel state
+.jupyter/
+profile_default/
+
+# Scala / SBT / build
+target/
+project/target/
+project/project/
+.bsp/
+.metals/
+.bloop/
+*.class
+*.log
+
+# Generated from Chisel / FIRRTL / Verilator
+gen-collateral/
+generated-src/
+*.v.bak
+*.sv.bak
+*.fir
+*.lo.fir
+*.hi.fir
+
+# Simulator outputs (large)
+*.vcd
+*.fsdb
+*.dump
+
+# Notebook live-run output directory
+tutorial/runs/
+
+# RISC-V build products
+*.riscv
+*.o
+*.hex
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local config
+.env
+local_config.json
+

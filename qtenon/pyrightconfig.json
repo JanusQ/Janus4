@@ -1,0 +1,14 @@
+{
+  "include": ["tutorial", "software"],
+  "exclude": ["**/__pycache__", "**/*.pyc", "**/runs", "tutorial/captures"],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "standard",
+  "reportMissingImports": "error",
+  "reportMissingTypeStubs": "none",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": ["."]
+    }
+  ]
+}
