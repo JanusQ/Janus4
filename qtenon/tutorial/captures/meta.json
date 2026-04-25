@@ -1,0 +1,20 @@
+{
+  "artifacts": {
+    "hybrid_loop": {
+      "elf_bytes": 37648,
+      "elf_sha256": "979134d1e9f5e7d4c509e17eafe91f3a57289ac05dc21b3f6cc49cf8a8f08c57",
+      "log_bytes": 456,
+      "trace_bytes": 2240
+    }
+  },
+  "captured_at_utc": "2026-04-24T09:14:52.840882Z",
+  "config_name": "QChipRocketConfig",
+  "config_sha256": "9712da100843e2f1b5358daa06897e32acab1da2a8dc83d9dd57c087bd058314",
+  "git_dirty": true,
+  "git_head": "16fa30e8a73a454a9d5a121ba465019392cde9e5",
+  "hw_tree_head": "b81d68b2d526791f2c2a96a5e60ff35abb2e0e61",
+  "schema_version": 3,
+  "toolchain_sha256": "d7be72d193b3c72eaa695c19e6628ed7768b1acd9317fa0a3b4c602ade6cd9a0",
+  "tutorial_tree_head": "02330ebdd349394d07a3a38afba1204a4e7e5722",
+  "verilator_version": "Verilator 5.008 2023-03-04 rev UNKNOWN.REV (mod)"
+}
