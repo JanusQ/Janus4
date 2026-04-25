@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.venv/
+venv/
+env/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Trellis (private workflow metadata — must never leak)
+.trellis/
+
+# Local simulator / build outputs
+build/
+dist/
+runs/
+
+# Secrets
+.env
+.env.*
+*.pem
+
+# Don't gitignore *.elf / *.log / *.txt globally — captured artifacts under
+# qtenon/tutorial/captures/ are committed baselines.
