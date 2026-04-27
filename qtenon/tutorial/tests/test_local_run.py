@@ -30,7 +30,25 @@ class CompileElfTest(unittest.TestCase):
     None of these tests invoke a real RISC-V toolchain — every
     ``subprocess.run`` call is intercepted by ``mock.patch`` so the suite
     stays green on CI and laptops without ``riscv64-unknown-elf-gcc``.
+
+    The Phase 2 Docker image bakes in ``QTENON_RISCV_GCC`` and
+    ``QTENON_SIMULATOR``; the per-test env-var scrub in :meth:`setUp` keeps
+    the default-path tests hermetic when run inside that image so AC5
+    (`unittest` passes inside container) holds.
     """
+
+    def setUp(self) -> None:
+        self._env_patcher = mock.patch.dict(
+            "tutorial.helpers.local_run.os.environ",
+            {
+                k: v
+                for k, v in os.environ.items()
+                if k not in {"QTENON_RISCV_GCC", "QTENON_SIMULATOR"}
+            },
+            clear=True,
+        )
+        self._env_patcher.start()
+        self.addCleanup(self._env_patcher.stop)
 
     def _fake_compile(self, tmp: Path) -> Path:
         """Build a stub ELF file so ``elf_out.stat().st_size`` works."""
@@ -171,9 +189,91 @@ class CompileElfTest(unittest.TestCase):
                 with self.assertRaises(ToolchainMissing):
                     compile_elf(src, elf_out)
 
+    def test_compile_elf_honors_qtenon_riscv_gcc_env_var(self) -> None:
+        """Phase 2: ``QTENON_RISCV_GCC`` overrides the PATH-relative default
+        so the Docker image can pin ``/usr/bin/riscv64-unknown-elf-gcc``
+        without callers caring."""
+
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            src = self._fake_compile(tmp)
+            elf_out = tmp / "demo.elf"
+            pinned_gcc = "/opt/riscv/bin/riscv64-unknown-elf-gcc"
+
+            def fake_run(argv, **_):  # type: ignore[no-untyped-def]
+                if argv[0].endswith("-gcc"):
+                    elf_out.write_bytes(b"stub")
+                    return SimpleNamespace(stdout="", stderr="", returncode=0)
+                return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+            with mock.patch.dict(
+                "tutorial.helpers.local_run.os.environ",
+                {"QTENON_RISCV_GCC": pinned_gcc},
+                clear=False,
+            ), mock.patch(
+                "tutorial.helpers.local_run.subprocess.run",
+                side_effect=fake_run,
+            ) as patched:
+                compile_elf(src, elf_out)
+
+            compile_argv = patched.call_args_list[0].args[0]
+            self.assertEqual(compile_argv[0], pinned_gcc)
+            # Derived objdump path also follows the env-var prefix.
+            objdump_argv = patched.call_args_list[1].args[0]
+            self.assertEqual(objdump_argv[0], "/opt/riscv/bin/riscv64-unknown-elf-objdump")
+
+    def test_compile_elf_falls_back_to_path_when_env_var_unset(self) -> None:
+        """Default behavior is preserved when ``QTENON_RISCV_GCC`` is unset."""
+
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            src = self._fake_compile(tmp)
+            elf_out = tmp / "demo.elf"
+
+            def fake_run(argv, **_):  # type: ignore[no-untyped-def]
+                if argv[0].endswith("-gcc"):
+                    elf_out.write_bytes(b"stub")
+                    return SimpleNamespace(stdout="", stderr="", returncode=0)
+                return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+            # Drop QTENON_RISCV_GCC if it leaked in from the host shell.
+            scrubbed = {
+                k: v
+                for k, v in os.environ.items()
+                if k != "QTENON_RISCV_GCC"
+            }
+            with mock.patch.dict(
+                "tutorial.helpers.local_run.os.environ",
+                scrubbed,
+                clear=True,
+            ), mock.patch(
+                "tutorial.helpers.local_run.subprocess.run",
+                side_effect=fake_run,
+            ) as patched:
+                compile_elf(src, elf_out)
+
+            compile_argv = patched.call_args_list[0].args[0]
+            self.assertEqual(compile_argv[0], "riscv64-unknown-elf-gcc")
+
 
 class EnsureSimulatorTest(unittest.TestCase):
     """Fake-subprocess coverage for :func:`ensure_simulator`."""
+
+    def setUp(self) -> None:
+        # Same env-var scrub as CompileElfTest — keep the default-path tests
+        # hermetic inside the Phase 2 Docker image (which bakes in
+        # ``QTENON_RISCV_GCC`` / ``QTENON_SIMULATOR``).
+        self._env_patcher = mock.patch.dict(
+            "tutorial.helpers.local_run.os.environ",
+            {
+                k: v
+                for k, v in os.environ.items()
+                if k not in {"QTENON_RISCV_GCC", "QTENON_SIMULATOR"}
+            },
+            clear=True,
+        )
+        self._env_patcher.start()
+        self.addCleanup(self._env_patcher.stop)
 
     def _layout_chipyard(self, tmp: Path, config_name: str) -> tuple[Path, Path]:
         sim_dir = tmp / "sims" / "verilator"
@@ -267,7 +367,7 @@ class EnsureSimulatorTest(unittest.TestCase):
             # Older-style name — the exact canonical path does NOT exist.
             legacy = sim_dir / "simulator-chipyard-QChipRocketConfig"
 
-            def fake_run(*_, **__):  # type: ignore[no-untyped-def]
+            def fake_run(*_args, **_kwargs):  # type: ignore[no-untyped-def]
                 legacy.write_bytes(b"stub")
                 legacy.chmod(legacy.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
                 return SimpleNamespace(stdout="", stderr="", returncode=0)
@@ -295,7 +395,7 @@ class EnsureSimulatorTest(unittest.TestCase):
             # A glob-only candidate that should lose to the canonical name.
             rogue = sim_dir / "simulator-chipyard-QChipRocketConfig"
 
-            def fake_run(*_, **__):  # type: ignore[no-untyped-def]
+            def fake_run(*_args, **_kwargs):  # type: ignore[no-untyped-def]
                 canonical.write_bytes(b"canonical stub")
                 canonical.chmod(canonical.stat().st_mode | stat.S_IEXEC)
                 rogue.write_bytes(b"rogue stub")
@@ -322,7 +422,7 @@ class EnsureSimulatorTest(unittest.TestCase):
             sim_dir.mkdir(parents=True)
             not_executable = sim_dir / "simulator-chipyard-QChipRocketConfig"
 
-            def fake_run(*_, **__):  # type: ignore[no-untyped-def]
+            def fake_run(*_args, **_kwargs):  # type: ignore[no-untyped-def]
                 not_executable.write_bytes(b"stub")
                 # Deliberately leave chmod 0o644 — not executable.
                 return SimpleNamespace(stdout="", stderr="", returncode=0)
@@ -336,6 +436,99 @@ class EnsureSimulatorTest(unittest.TestCase):
             ):
                 with self.assertRaises(VerilatorMissing):
                     ensure_simulator(chipyard_root, "QChipRocketConfig")
+
+    def test_ensure_simulator_returns_env_var_path_when_executable(self) -> None:
+        """Phase 2: ``QTENON_SIMULATOR`` short-circuits the Chipyard tree
+        walk when it points at an executable file. Used by Phase 3 to
+        bind the bundled ``/usr/local/bin/qtenon-sim`` directly."""
+
+        with tempfile.NamedTemporaryFile(
+            prefix="qtenon-sim-", delete=False
+        ) as tmp_bin:
+            sim_path = Path(tmp_bin.name)
+            tmp_bin.write(b"#!/bin/sh\nexit 0\n")
+        try:
+            sim_path.chmod(
+                sim_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH
+            )
+
+            with mock.patch.dict(
+                "tutorial.helpers.local_run.os.environ",
+                {"QTENON_SIMULATOR": str(sim_path)},
+                clear=False,
+            ):
+                # chipyard_root is intentionally a bogus path — env-var hit
+                # must skip the tree walk entirely.
+                result = ensure_simulator(
+                    Path("missing-chipyard-root"),
+                    "QChipRocketConfig",
+                )
+
+            self.assertEqual(result, sim_path)
+        finally:
+            sim_path.unlink(missing_ok=True)
+
+    def test_ensure_simulator_falls_back_when_env_var_path_missing(self) -> None:
+        """If ``QTENON_SIMULATOR`` is set but the file does not exist (or is
+        not executable), the helper falls through to the Chipyard tree
+        walk so a misconfigured env var doesn't silently break validation environment."""
+
+        with tempfile.TemporaryDirectory() as tmp_str:
+            chipyard_root, simulator = self._layout_chipyard(
+                Path(tmp_str), "QChipRocketConfig"
+            )
+
+            def fake_run(_argv, **_):  # type: ignore[no-untyped-def]
+                simulator.write_bytes(b"stub simulator")
+                return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+            with mock.patch.dict(
+                "tutorial.helpers.local_run.os.environ",
+                {"QTENON_SIMULATOR": "/this/path/does/not/exist/qtenon-sim"},
+                clear=False,
+            ), mock.patch(
+                "tutorial.helpers.local_run.shutil.which",
+                side_effect=self._which_stub(missing=set()),
+            ), mock.patch(
+                "tutorial.helpers.local_run.subprocess.run",
+                side_effect=fake_run,
+            ):
+                result = ensure_simulator(chipyard_root, "QChipRocketConfig")
+
+            # Fell back to the chipyard-built canonical simulator.
+            self.assertEqual(result, simulator)
+
+    def test_ensure_simulator_falls_back_when_env_var_unset(self) -> None:
+        """Existing behavior preserved when ``QTENON_SIMULATOR`` is unset."""
+
+        with tempfile.TemporaryDirectory() as tmp_str:
+            chipyard_root, simulator = self._layout_chipyard(
+                Path(tmp_str), "QChipRocketConfig"
+            )
+
+            def fake_run(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+                simulator.write_bytes(b"stub simulator")
+                return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+            scrubbed = {
+                k: v
+                for k, v in os.environ.items()
+                if k != "QTENON_SIMULATOR"
+            }
+            with mock.patch.dict(
+                "tutorial.helpers.local_run.os.environ",
+                scrubbed,
+                clear=True,
+            ), mock.patch(
+                "tutorial.helpers.local_run.shutil.which",
+                side_effect=self._which_stub(missing=set()),
+            ), mock.patch(
+                "tutorial.helpers.local_run.subprocess.run",
+                side_effect=fake_run,
+            ):
+                result = ensure_simulator(chipyard_root, "QChipRocketConfig")
+
+            self.assertEqual(result, simulator)
 
 
 class RunLocalSimTest(unittest.TestCase):
@@ -361,6 +554,10 @@ class RunLocalSimTest(unittest.TestCase):
             tmp = Path(tmp_str)
             sim_dir = tmp / "sims" / "verilator"
             sim_dir.mkdir(parents=True)
+            # Make-mode preconditions: a Makefile must exist for
+            # _direct_mode_available to return False; the test environment
+            # also needs ``make`` on PATH (CI runners ship it).
+            (sim_dir / "Makefile").write_text("# stub\n", encoding="utf-8")
             simulator = sim_dir / "simulator-chipyard.harness-QChipRocketConfig"
             simulator.write_bytes(b"fake simulator")
             elf = tmp / "hybrid_loop_demo.riscv"
@@ -384,7 +581,20 @@ class RunLocalSimTest(unittest.TestCase):
                 (chipyard_output / "hybrid_loop_demo.out").write_text(fake_stdout, encoding="utf-8")
                 return SimpleNamespace(stdout="", stderr="", returncode=0)
 
-            with mock.patch(
+            # Force make-mode by stubbing the QTENON_DIRECT_SIM env var off
+            # and ensuring shutil.which("make") returns a path so the
+            # direct-mode pre-flight returns False.
+            scrubbed_env = {
+                k: v for k, v in os.environ.items() if k != "QTENON_DIRECT_SIM"
+            }
+            with mock.patch.dict(
+                "tutorial.helpers.local_run.os.environ",
+                scrubbed_env,
+                clear=True,
+            ), mock.patch(
+                "tutorial.helpers.local_run.shutil.which",
+                return_value="/usr/bin/make",
+            ), mock.patch(
                 "tutorial.helpers.local_run.subprocess.run",
                 side_effect=fake_run,
             ):
@@ -427,6 +637,9 @@ class RunLocalSimTest(unittest.TestCase):
             tmp = Path(tmp_str)
             sim_dir = tmp / "sims" / "verilator"
             sim_dir.mkdir(parents=True)
+            # Make-mode preconditions: keep this test exercising the make-mode
+            # branch so the FileNotFoundError on make surfaces as VerilatorMissing.
+            (sim_dir / "Makefile").write_text("# stub\n", encoding="utf-8")
             simulator = sim_dir / "simulator-chipyard.harness-QChipRocketConfig"
             # Create the simulator file so the new pre-flight check passes;
             # the stubbed subprocess.run still raises FileNotFoundError on make.
@@ -435,7 +648,17 @@ class RunLocalSimTest(unittest.TestCase):
             elf.write_bytes(b"fake elf")
             out_dir = tmp / "runs"
 
-            with mock.patch(
+            scrubbed_env = {
+                k: v for k, v in os.environ.items() if k != "QTENON_DIRECT_SIM"
+            }
+            with mock.patch.dict(
+                "tutorial.helpers.local_run.os.environ",
+                scrubbed_env,
+                clear=True,
+            ), mock.patch(
+                "tutorial.helpers.local_run.shutil.which",
+                return_value="/usr/bin/make",
+            ), mock.patch(
                 "tutorial.helpers.local_run.subprocess.run",
                 side_effect=FileNotFoundError("make"),
             ):
@@ -470,6 +693,88 @@ class RunLocalSimTest(unittest.TestCase):
                     chipyard_root=tmp,
                     config_name="QChipRocketConfig",
                 )
+
+    def test_run_local_sim_direct_mode_uses_simulator_directly(self) -> None:
+        """Phase 3 v2: ``QTENON_DIRECT_SIM=1`` skips the chipyard make tree
+        and invokes the simulator binary directly. The fake sim emits a
+        captured chisel-printf trace on stderr (16 lines from the hybrid_loop
+        capture) and the captured UART log on stdout, mirroring how the real
+        chipyard simulator separates trace (stderr) from log (stdout)."""
+
+        # 16 chipyard chisel-printf lines, verbatim from
+        # code/tutorial/captures/hybrid_loop/hybrid_loop.trace.txt.
+        captured_trace_lines = [
+            "C0:      20060 [1] pc=[0000000080000378] W[r 0=0000000000000000][0] R[r12=00000000800021b0] R[r15=0000400000000000] inst=[00f6300b] unknown",
+            "C0:      20064 [1] pc=[00000000800002ba] W[r 0=0000000000000000][0] R[r 0=0000000000000000] R[r 0=0000000000000000] inst=[0a00000b] unknown",
+            "C0:      20083 [1] pc=[00000000800002be] W[r 0=0000000000000000][0] R[r24=0000000000000080] R[r 0=0000000000000000] inst=[080c600b] unknown",
+            "C0:      20235 [1] pc=[00000000800002c6] W[r10=0000000000000000][0] R[r11=0000000080002170] R[r 0=0000000000000000] inst=[0c05e50b] unknown",
+            "C0:      31683 [1] pc=[00000000800002b2] W[r 0=0000000000000000][0] R[r15=a101000100260013] R[r14=0000000000000040] inst=[02e7b00b] unknown",
+            "C0:      31685 [1] pc=[00000000800002ba] W[r 0=0000000000000000][0] R[r 0=0000000000000000] R[r 0=0000000000000000] inst=[0a00000b] unknown",
+            "C0:      31686 [1] pc=[00000000800002be] W[r 0=0000000000000000][0] R[r24=0000000000000080] R[r 0=0000000000000000] inst=[080c600b] unknown",
+            "C0:      31688 [1] pc=[00000000800002c6] W[r10=0000000000000000][0] R[r11=0000000080002170] R[r 0=0000000000000000] inst=[0c05e50b] unknown",
+            "C0:      42660 [1] pc=[00000000800002b2] W[r 0=0000000000000000][0] R[r15=a102000200370013] R[r14=0000000000000040] inst=[02e7b00b] unknown",
+            "C0:      42662 [1] pc=[00000000800002ba] W[r 0=0000000000000000][0] R[r 0=0000000000000000] R[r 0=0000000000000000] inst=[0a00000b] unknown",
+            "C0:      42663 [1] pc=[00000000800002be] W[r 0=0000000000000000][0] R[r24=0000000000000080] R[r 0=0000000000000000] inst=[080c600b] unknown",
+            "C0:      42665 [1] pc=[00000000800002c6] W[r10=0000000000000000][0] R[r11=0000000080002170] R[r 0=0000000000000000] inst=[0c05e50b] unknown",
+            "C0:      53635 [1] pc=[00000000800002b2] W[r 0=0000000000000000][0] R[r15=a103000300370026] R[r14=0000000000000040] inst=[02e7b00b] unknown",
+            "C0:      53637 [1] pc=[00000000800002ba] W[r 0=0000000000000000][0] R[r 0=0000000000000000] R[r 0=0000000000000000] inst=[0a00000b] unknown",
+            "C0:      53638 [1] pc=[00000000800002be] W[r 0=0000000000000000][0] R[r24=0000000000000080] R[r 0=0000000000000000] inst=[080c600b] unknown",
+            "C0:      53640 [1] pc=[00000000800002c6] W[r10=0000000000000000][0] R[r11=0000000080002170] R[r 0=0000000000000000] inst=[0c05e50b] unknown",
+        ]
+        captured_log = (
+            "[UART] UART0 is here (stdin/stdout).\n"
+            "mode=Act 3 minimal hardware loop\n"
+            "iter,theta0_idx,theta1_idx,sample_bits,objective_ppm,acquire_word\n"
+            "0,12,38,01,1295,4616195180039897100\n"
+            "- simulator/verilator/generated-src/X.v:158: Verilog $finish\n"
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            simulator = tmp / "fake-sim"
+            # Build a tiny Python script that replays the captured trace on
+            # stderr and the captured log on stdout, then exits 0. Using
+            # repr() embeds the strings safely without needing escape gymnastics.
+            trace_payload = "\n".join(captured_trace_lines) + "\n"
+            simulator.write_text(
+                "#!/usr/bin/env python3\n"
+                "import sys\n"
+                f"sys.stdout.write({captured_log!r})\n"
+                f"sys.stderr.write({trace_payload!r})\n",
+                encoding="utf-8",
+            )
+            simulator.chmod(
+                simulator.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH
+            )
+
+            elf = tmp / "hybrid_loop_demo.riscv"
+            elf.write_bytes(b"fake elf")
+            out_dir = tmp / "runs" / "direct-1"
+
+            os.environ["QTENON_DIRECT_SIM"] = "1"
+            try:
+                # chipyard_root intentionally bogus — direct-mode pre-flight
+                # short-circuits the make tree walk.
+                result = run_local_sim(
+                    simulator,
+                    elf,
+                    out_dir,
+                    chipyard_root=Path("missing-chipyard-root"),
+                    config_name="QChipRocketConfig",
+                )
+            finally:
+                os.environ.pop("QTENON_DIRECT_SIM", None)
+
+            self.assertIsInstance(result, LocalRunResult)
+            self.assertGreater(result.trace_bytes, 0)
+            self.assertEqual(result.custom0_count, 16)
+            self.assertGreater(result.cycle_count, 0)
+            self.assertEqual(result.cycle_count, 53640)
+            # Log should mirror stdout verbatim.
+            self.assertEqual(result.log_path.read_text(encoding="utf-8"), captured_log)
+
+    def tearDown(self) -> None:
+        os.environ.pop("QTENON_DIRECT_SIM", None)
 
 
 if __name__ == "__main__":

@@ -1,14 +1,36 @@
 # Qtenon Tutorial Setup
 
+> **Attendees: skip this file.** The recommended path is the Docker image —
+> see [`DOCKER.md`](DOCKER.md) for the one-line `docker pull` + `docker run`
+> snippet. This file is for contributors editing helpers, hardware sources,
+> or capture regeneration.
+
 ## Modes
 
-- **Default tutorial mode**: local replay from committed notebook artifacts,
-  captures, and figures. This path should not require validation environment access.
-- **Contributor mode**: validation environment-backed capture regeneration and hardware validation.
-- **Current transition note**: some legacy helper code still reflects the older
-  validation environment-coupled notebook flow until `04-21-qtenon-demo-rewrite` lands.
+- **Default attendee mode**: Docker image — see [`DOCKER.md`](DOCKER.md).
+- **Contributor mode**: local Python venv against committed notebook
+  artifacts, captures, and figures. No validation environment access required.
+- **Contributor mode**: validation environment-backed capture regeneration and hardware
+  validation.
+
+## Docker (recommended)
+
+```bash
+docker pull janusq/qtenon:isca2026
+docker run --rm -p 127.0.0.1:8888:8888 janusq/qtenon:isca2026
+```
+
+Opens JupyterLab on `http://localhost:8888/lab` with the tutorial notebook
+ready to run end-to-end (cells [3] / [14] cross-compile and run the
+Verilator simulator live inside the container). On Apple Silicon, prepend
+`--platform linux/amd64`. See [`DOCKER.md`](DOCKER.md) for the full
+attendee guide and the contributor rebuild flow.
 
 ## Local Python Environment
+
+> Use this path only if you need to edit helpers in `tutorial/helpers/`,
+> hardware sources in `hw/`, or rebuild capture artefacts from validation environment.
+> Attendees should use Docker (see above).
 
 Create and use the repo-local virtual environment:
 

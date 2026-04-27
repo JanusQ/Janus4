@@ -96,7 +96,17 @@ def compile_elf(
 
     Raises :class:`ToolchainMissing` when either the C compiler or
     ``objdump`` is absent from ``PATH``.
+
+    The ``QTENON_RISCV_GCC`` environment variable, when set, overrides the
+    ``toolchain`` argument so the Docker image (Phase 2) can pin the
+    apt-installed cross compiler at ``/usr/bin/riscv64-unknown-elf-gcc``
+    without callers needing to know that. Unset → preserve current PATH
+    lookup behavior.
     """
+
+    env_toolchain = os.environ.get("QTENON_RISCV_GCC")
+    if env_toolchain:
+        toolchain = env_toolchain
 
     elf_out.parent.mkdir(parents=True, exist_ok=True)
     objdump_path = elf_out.with_suffix(elf_out.suffix + ".objdump.txt")
@@ -165,7 +175,20 @@ def ensure_simulator(chipyard_root: Path, config_name: str) -> Path:
       ``PATH`` → :class:`ToolchainMissing`.
     - ``verilator`` missing, or the C++ build step exits non-zero →
       :class:`VerilatorMissing`.
+
+    The ``QTENON_SIMULATOR`` environment variable, when set to an existing
+    executable file, short-circuits the entire Chipyard tree walk and
+    build step — the bundled Docker image (Phase 3) points this at
+    ``/usr/local/bin/qtenon-sim``. Unset, or pointing at a non-existent /
+    non-executable path → fall through to the current Chipyard-build
+    behavior so existing validation environment / venv flows are unaffected.
     """
+
+    env_simulator = os.environ.get("QTENON_SIMULATOR")
+    if env_simulator:
+        env_path = Path(env_simulator)
+        if env_path.is_file() and os.access(env_path, os.X_OK):
+            return env_path
 
     sim_dir = chipyard_root / "sims" / "verilator"
     if not sim_dir.is_dir():
@@ -213,6 +236,40 @@ def ensure_simulator(chipyard_root: Path, config_name: str) -> Path:
     )
 
 
+def _direct_mode_available(chipyard_root: Path) -> bool:
+    """Direct-invocation when make/chipyard tree are absent (Docker image flow)."""
+    if os.environ.get("QTENON_DIRECT_SIM") == "1":
+        return True
+    if shutil.which("make") is None:
+        return True
+    if not (chipyard_root / "sims" / "verilator" / "Makefile").is_file():
+        return True
+    return False
+
+
+def _run_direct(simulator: Path, elf: Path, out_dir: Path) -> tuple[str, str, float]:
+    """Invoke simulator directly. Returns (raw_trace_stderr, log_stdout, wall_seconds)."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    argv = [str(simulator), "+permissive", "+verbose", "+permissive-off", str(elf.resolve())]
+    start = time.monotonic()
+    try:
+        completed = subprocess.run(
+            argv,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise VerilatorMissing(f"simulator binary not executable: {exc}") from exc
+    wall = time.monotonic() - start
+    if completed.returncode != 0:
+        raise VerilatorMissing(
+            f"direct-mode simulator exited with status {completed.returncode}: "
+            f"{(completed.stderr or completed.stdout)[-500:]}"
+        )
+    return completed.stderr, completed.stdout, wall
+
+
 def run_local_sim(
     simulator: Path,
     elf: Path,
@@ -221,17 +278,30 @@ def run_local_sim(
     chipyard_root: Path,
     config_name: str,
 ) -> "LocalRunResult":
-    """Run the chipyard verilator simulator on ``elf`` via ``make run-binary``.
+    """Run the chipyard verilator simulator on ``elf``.
 
-    Delegates to chipyard's ``sims/verilator/Makefile`` (target
-    ``run-binary``) so the invocation matches what ``capture artifact flow``
-    does remotely: correct ``+permissive / +dramsim / +max-cycles /
-    +verbose`` flags, stderr piped through ``spike-dasm`` into
-    ``{elf.stem}.out``, stdout ``tee``'d into ``{elf.stem}.log``. Those
-    two chipyard-produced files are then copied back into ``out_dir`` as
-    ``{elf.stem}.trace.txt`` (filtered via
-    :func:`tutorial.helpers.trace.filter_trace`, same filter as the
-    archive pipeline) and ``{elf.stem}.log`` respectively.
+    Two execution modes are supported:
+
+    * **Make mode** (default validation environment contributor flow): delegates to
+      chipyard's ``sims/verilator/Makefile`` (target ``run-binary``) so
+      the invocation matches what ``capture artifact flow`` does remotely:
+      correct ``+permissive / +dramsim / +max-cycles / +verbose`` flags,
+      stderr piped through ``spike-dasm`` into ``{elf.stem}.out``, stdout
+      ``tee``'d into ``{elf.stem}.log``. Those two chipyard-produced
+      files are then copied back into ``out_dir``.
+
+    * **Direct mode** (Phase 3 v2 Docker flow): when ``make`` is absent
+      from PATH, the chipyard ``sims/verilator/Makefile`` is missing, or
+      ``QTENON_DIRECT_SIM=1`` is set, the simulator binary is invoked
+      directly with ``+permissive +verbose +permissive-off <elf>``.
+      stderr (chipyard chisel-printf trace) is captured as the raw trace;
+      stdout (UART output via HTIF) becomes the log. ``filter_trace`` is
+      independent of spike-dasm so this mode skips the dasm step entirely.
+
+    In both modes the resulting filtered trace lands at
+    ``out_dir/{elf.stem}.trace.txt`` (after :func:`tutorial.helpers.trace.filter_trace`,
+    same filter as the archive pipeline) and the UART log at
+    ``out_dir/{elf.stem}.log``.
 
     ``chipyard_root`` and ``config_name`` are passed in explicitly by the
     caller (notebook cell [14] reads them from ``PreparedRun`` so they
@@ -252,6 +322,28 @@ def run_local_sim(
 
     if not simulator.is_file():
         raise VerilatorMissing(f"simulator binary not found: {simulator}")
+
+    if _direct_mode_available(chipyard_root):
+        raw_trace, log_text, wall = _run_direct(simulator, elf, out_dir)
+        log_path.write_text(log_text, encoding="utf-8")
+        trace_text = filter_trace(raw_trace)
+        trace_path.write_text(trace_text, encoding="utf-8")
+        parsed = parse_trace_text(trace_text)
+        cycle_count = 0
+        for entry in reversed(parsed):
+            if entry.cycle is not None:
+                cycle_count = entry.cycle
+                break
+        custom0_count = len(parsed)
+        return LocalRunResult(
+            trace_path=trace_path,
+            log_path=log_path,
+            trace_bytes=trace_path.stat().st_size,
+            log_bytes=log_path.stat().st_size,
+            cycle_count=cycle_count,
+            custom0_count=custom0_count,
+            wall_seconds=wall,
+        )
 
     sim_dir = chipyard_root / "sims" / "verilator"
     chipyard_output = (

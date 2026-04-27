@@ -40,17 +40,17 @@ def code_cell(source: str, *, cell_id: str) -> dict[str, object]:
 
 
 MD_WHY_QTENON = """
-# Qtenon Tutorial — Hybrid Quantum-Classical as One RISC-V Program
+# Qtenon Tutorial: Hybrid Quantum-Classical as One RISC-V Program
 
 This notebook is the hands-on companion to the Qtenon section of the Janus 4.0 tutorial. Every cell is meant to be read alongside the corresponding slide; the story is the shift from a decoupled host + FPGA-controller + quantum architecture to a tightly coupled RISC-V core whose ISA treats quantum programs as computable data.
 
-The paper claim we are servicing: end-to-end hybrid workloads run up to 14.9× faster than state-of-the-art decoupled architectures (Qtenon, ISCA 2025). This notebook does not reproduce that speedup number — it reproduces the mechanisms that produce it, at a scale small enough to run entirely on the local machine in under a minute.
+The paper claim we are servicing: end-to-end hybrid workloads run up to 14.9× faster than state-of-the-art decoupled architectures (Qtenon, ISCA 2025). This notebook does not reproduce that speedup number. It reproduces the mechanisms that produce it, at a scale small enough to run entirely on the local machine in under a minute.
 
 ## Why Qtenon exists
 
 A hybrid quantum-classical algorithm spends most of its wall-clock time **not** in quantum computation. Figure 1 of the paper (reproduced below) shows the profile for 64-qubit QAOA, VQE, and QNN: quantum execution is 7.9 %–11 % of the total; the rest is communication between host and quantum accelerator, repeated classical compilation, and classical post-processing.
 
-![Runtime breakdown for hybrid workloads — paper Fig. 1](figures/time_percentage.svg)
+![Runtime breakdown for hybrid workloads, paper Fig. 1](figures/time_percentage.svg)
 
 The root cause is architectural: today's systems put a decoupled FPGA controller between the host CPU and the quantum device, with a USB or Ethernet link carrying every circuit and every measurement across a process boundary. Qtenon replaces that middleman with a RoCC-attached quantum controller sitting at the host's L1 cache level.
 
@@ -65,12 +65,12 @@ The root cause is architectural: today's systems put a decoupled FPGA controller
 
 The rest of this notebook turns each row of that table into code you can read and cycle counts you can check.
 
-![Qtenon system overview — paper Fig. 2](figures/qtenon_overview.svg)
+![Qtenon system overview, paper Fig. 2](figures/qtenon_overview.svg)
 """
 
 
 MD_SETUP_V3 = """
-## Setup — verify toolchain, compile the hybrid loop ELF
+## Setup: verify toolchain, compile the hybrid loop ELF
 
 The rest of this notebook is driven by a single program,
 `software/tests/hybrid_loop_demo.c`, and by a Verilator build of
@@ -80,32 +80,29 @@ the chipyard source tree, so the next cell does two things right
 here in the container:
 
 1. cross-compile the C program to a RISC-V ELF,
-2. make sure the Verilator simulator binary is up to date (no-op
-   if the image already has it — takes a few seconds; full rebuild
-   takes ~1 min on 8–16 cores).
+2. make sure the Verilator simulator binary is up to date.
+
+If the image already has the binary, step 2 is a no-op and takes
+a few seconds. A full rebuild takes ~1 min on 8–16 cores.
 
 **The simulator is not invoked yet.** That lands at the bottom of
 the notebook, at the opening of §End-to-end consequence, where we
 actually run all four iterations of the hybrid loop and walk the
-retire timeline in one pass. The middle sections — programming
-model, R-type field layout, two on-chip datapaths — draw their
+retire timeline in one pass. The middle sections (programming
+model, R-type field layout, two on-chip datapaths) draw their
 evidence from the checked-in `captures/hybrid_loop/` archive: same
 bytes, same cycles, same custom0 words the live run will produce
-at the bottom. That ordering keeps the story on a crescendo: first
-unpack what every single instruction means statically, then — at
-the end — run the loop live and see the 16 retires land in order.
-
-If the container is missing the toolchain, the opener prints a
-visible banner; the middle section still works off captures as
-normal, and the end-to-end section falls back to the same archive
-when it would otherwise have run live.
+at the bottom. That ordering keeps the story on a crescendo. We
+first unpack what every single instruction means statically. Then,
+at the end, we run the loop live and see the 16 retires land in
+order.
 """
 
 
 MD_PROGRAMMING_MODEL = """
 ## Programming model: the hybrid loop as one RISC-V program
 
-In a decoupled system, a hybrid iteration looks like this (pseudocode — the classic Janus 3.0 world):
+In a decoupled system, a hybrid iteration looks like this (pseudocode for the classic Janus 3.0 world):
 
 ```python
 # Host Python process
@@ -130,25 +127,25 @@ Qtenon replaces that with a RoCC ISA extension. Five instructions, shown below, 
 
 *(Table 2 of the paper, §6.1.)*
 
-All five are RoCC custom0 instructions. The encoding fits the standard RoCC R-type layout — same funct7/funct3/rs1/rs2/rd fields you know from any Rocket-attached accelerator:
+All five are RoCC custom0 instructions. The encoding fits the standard RoCC R-type layout, with the same funct7/funct3/rs1/rs2/rd fields you know from any Rocket-attached accelerator:
 
-![RoCC instruction layout — paper Fig. 4](figures/isa_instructions.svg)
+![RoCC instruction layout, paper Fig. 4](figures/isa_instructions.svg)
 
 The next cells open the real tutorial C sources behind these instructions, then walk the compiled objdump output to confirm the emitted custom0 words match the paper-visible ISA surface.
 """
 
 
 MD_RTYPE_FIELDS = """
-Below is the packed instruction for a single `q_set` call, broken out field by field from the raw 32-bit word. The opcode is `custom0` (`0b0001011`); funct7 and funct3 together identify the instruction class; `rs1` points at the host-memory source; `rs2` carries the QAddress (destination segment base) and transfer length as a packed 64-bit payload. The QAddress is in the *payload*, never in the architectural instruction fields — that is how one opcode `q_set` can target any segment (`.program`, `.regfile`, …) in the quantum controller cache.
+Below is the packed instruction for a single `q_set` call, broken out field by field from the raw 32-bit word. The opcode is `custom0` (`0b0001011`); funct7 and funct3 together identify the instruction class; `rs1` points at the host-memory source; `rs2` carries the QAddress (destination segment base) and transfer length as a packed 64-bit payload. The QAddress is in the *payload*, never in the architectural instruction fields. That is how one opcode `q_set` can target any segment (`.program`, `.regfile`, …) in the quantum controller cache.
 """
 
 
 MD_TWO_DATAPATHS = """
 ## Two on-chip datapaths
 
-The ISA is the programmer-facing surface. Underneath, the quantum controller exposes **two distinct host-facing datapaths** into the quantum controller cache (QCC), plus two internal paths the user never touches. Which datapath each instruction uses is not something the programmer picks — the hardware routes based on the instruction class.
+The ISA is the programmer-facing surface. Underneath, the quantum controller exposes **two distinct host-facing datapaths** into the quantum controller cache (QCC), plus two internal paths the user never touches. The programmer does not pick the datapath. The hardware routes based on the instruction class.
 
-![Unified memory hierarchy and four datapaths — paper Fig. 3](figures/memory_space.svg)
+![Unified memory hierarchy and four datapaths, paper Fig. 3](figures/memory_space.svg)
 
 | # | Connection | Interface | Latency | Serves |
 | --- | --- | --- | --- | --- |
@@ -161,12 +158,12 @@ The ISA is the programmer-facing surface. Underneath, the quantum controller exp
 
 The key point: **both ① and ② are inside the chip.** Neither crosses a network, a USB link, or a process boundary. The 1–10 ms decoupled baseline in Table 1 collapses because there is no longer a link to be slow.
 
-The next few cells look at the concrete trace evidence for each path — first a `q_update` firing on path ①, then a `q_set` firing on path ②.
+The next few cells look at the concrete trace evidence for each path: first a `q_update` firing on path ①, then a `q_set` firing on path ②.
 """
 
 
 MD_PATH2_DETAIL = """
-Path ② is the bulk L2 ↔ public QCC connection. It carries `q_set` (host memory into `.program` / `.regfile`) and `q_acquire` (`.measure` back into host memory). Behind the scenes, the controller interface splits requests across a TileLink bus, reorders out-of-order responses via the RBQ, and packs 32-bit lanes in the WBQ. From the host's point of view that complexity is invisible — one `q_set` instruction, one destination QAddress, one transfer length — but in the trace we can see the individual TileLink GETs and cache commits, and we can count cycles.
+Path ② is the bulk L2 ↔ public QCC connection. It carries `q_set` (host memory into `.program` / `.regfile`) and `q_acquire` (`.measure` back into host memory). Behind the scenes, the controller interface splits requests across a TileLink bus, reorders out-of-order responses via the RBQ, and packs 32-bit lanes in the WBQ. From the host's point of view that complexity is invisible: one `q_set` instruction, one destination QAddress, one transfer length. In the trace we can see the individual TileLink GETs and cache commits, and we can count cycles.
 
 The captured trace below comes from one `q_set` moving program words into `.program` and one `q_update` dropping a 64-bit parameter payload straight into `.regfile`.
 """
@@ -177,11 +174,11 @@ MD_END_TO_END = """
 
 Now we put the two paths to work inside an actual VQE-style iteration loop. The pattern is simple: iteration 0 sets up the program (bulk, path ②); iterations 1..K only update the variational parameter (register, path ①). Nothing about the program structure changes across iterations, so recompilation is unnecessary and the whole iteration becomes a single-cycle parameter swap plus a `q_gen` / `q_run` / `q_acquire` triple.
 
-This is what the paper calls "dynamic incremental compilation" (§6.1). It is not an optimization added on top of the ISA — it is a direct consequence of having two separate datapaths and letting the ISA pick the one that matches the data shape.
+This is what the paper calls "dynamic incremental compilation" (§6.1). It is not an optimization added on top of the ISA. It is a direct consequence of having two separate datapaths and letting the ISA pick the one that matches the data shape.
 
 The second half of Act 3 covers fine-grained synchronization (§6.3): because the quantum controller cache writes to host memory via TileLink PUTs post-hoc, the host can start post-processing measurements from shot *i* while the controller is still running shots *i+1*, *i+2*, …:
 
-![FENCE vs fine-grained synchronization — paper Fig. 6](figures/timing.svg)
+![FENCE vs fine-grained synchronization, paper Fig. 6](figures/timing.svg)
 """
 
 
@@ -198,15 +195,15 @@ MD_CONCLUSION = """
 
 This notebook showed:
 
-1. **Programming model** — a hybrid quantum-classical loop written as one C program using five ISA extensions (Act 1).
-2. **Hardware fabric** — two on-chip datapaths (RoCC single-cycle register path, TileLink bulk L2↔QCC path) replacing the decoupled USB/Ethernet link (Act 2).
-3. **Runtime consequence** — iterations 1..K use the single-cycle path for parameter-only updates, and the memory consistency protocol permits the host to interleave post-processing with quantum execution (Act 3).
+1. **Programming model**: a hybrid quantum-classical loop written as one C program using five ISA extensions (Act 1).
+2. **Hardware fabric**: two on-chip datapaths (RoCC single-cycle register path, TileLink bulk L2↔QCC path) replacing the decoupled USB/Ethernet link (Act 2).
+3. **Runtime consequence**: iterations 1..K use the single-cycle path for parameter-only updates, and the memory consistency protocol permits the host to interleave post-processing with quantum execution (Act 3).
 
 This notebook did **not** reproduce:
 
-- the 441.5× classical-processing or 14.9× end-to-end speedup numbers — those require the full 64-qubit VQE workload and the ASIC host model (paper §7);
-- the SLT skip-lookup behavior (datapath ③ — controller-internal);
-- the pulse output to physical DACs (datapath ④ — no real quantum chip in this simulator);
+- the 441.5× classical-processing or 14.9× end-to-end speedup numbers, which require the full 64-qubit VQE workload and the ASIC host model (paper §7);
+- the SLT skip-lookup behavior (datapath ③, controller-internal);
+- the pulse output to physical DACs (datapath ④, no real quantum chip in this simulator);
 - the full instruction scheduler's batched transmission policy (paper §6.2).
 
 For any of those, read paper §5–§7 directly. The corresponding figures are under `paper_list/ISCA2025_Qtenon/pic/experiment/`.
@@ -251,8 +248,6 @@ from tutorial.helpers.encode import (
 )
 from tutorial.helpers.notebook_support import (
     CaptureMissing,
-    ToolchainMissing,
-    VerilatorMissing,
     compile_elf,
     ensure_simulator,
     find_objdump_line,
@@ -277,17 +272,14 @@ import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
 class PreparedRun:
-    toolchain: str
     capture: object
-    elf_path: Optional[Path]
-    simulator_path: Optional[Path]
+    elf_path: Path
+    simulator_path: Path
     run_dir: Path
-    reason: Optional[str]
     chipyard_root: Path
     config_name: str
 
@@ -297,100 +289,61 @@ if run_dir.exists():
     shutil.rmtree(run_dir)
 run_dir.mkdir(parents=True, exist_ok=True)
 
-toolchain = "ready"
-reason = None
-elf_path = None
-simulator_path = None
-compile_wall = None
-sim_wall = None
-sim_status = None
-elf_bytes = None
+t0 = time.perf_counter()
+elf_result = compile_elf(
+    paths.tests_dir / "hybrid_loop_demo.c",
+    run_dir / "hybrid_loop.elf",
+)
+compile_wall = time.perf_counter() - t0
+elf_path = Path(elf_result.elf_path)
+elf_bytes = elf_path.stat().st_size
 
-try:
-    t0 = time.perf_counter()
-    elf_result = compile_elf(
-        paths.tests_dir / "hybrid_loop_demo.c",
-        run_dir / "hybrid_loop.elf",
-    )
-    compile_wall = time.perf_counter() - t0
-    elf_path = Path(elf_result.elf_path)
-    elf_bytes = elf_path.stat().st_size
+# Dump the fresh objdump so runs/ is self-contained.
+objdump_target = run_dir / "hybrid_loop.objdump.txt"
+if hasattr(elf_result, "objdump_text") and elf_result.objdump_text is not None:
+    objdump_target.write_text(elf_result.objdump_text, encoding="utf-8")
 
-    # Dump the fresh objdump so runs/ is self-contained.
-    objdump_target = run_dir / "hybrid_loop.objdump.txt"
-    if hasattr(elf_result, "objdump_text") and elf_result.objdump_text is not None:
-        objdump_target.write_text(elf_result.objdump_text, encoding="utf-8")
-
-    t1 = time.perf_counter()
-    simulator_path = ensure_simulator(paths.chipyard_root, paths.config_name)
-    sim_wall = time.perf_counter() - t1
-    sim_status = "(no-op: binary already built)"
-except (ToolchainMissing, VerilatorMissing) as exc:
-    toolchain = "missing"
-    reason = str(exc) or exc.__class__.__name__
+t1 = time.perf_counter()
+simulator_path = ensure_simulator(paths.chipyard_root, paths.config_name)
+sim_wall = time.perf_counter() - t1
+sim_status = "(no-op: binary already built)"
 
 capture = load_capture_static(paths.captures_dir, "hybrid_loop")
 
 prepared = PreparedRun(
-    toolchain=toolchain,
     capture=capture,
-    elf_path=elf_path if toolchain == "ready" else None,
-    simulator_path=simulator_path if toolchain == "ready" else None,
+    elf_path=elf_path,
+    simulator_path=simulator_path,
     run_dir=run_dir,
-    reason=reason,
     chipyard_root=paths.chipyard_root,
     config_name=paths.config_name,
 )
 
 capture_trace_bytes = len(capture.trace_text.encode("utf-8"))
 
-if prepared.toolchain == "ready":
-    print(
-        f"Cross-compiling hybrid_loop_demo.c…  {compile_wall:4.1f} s  "
-        f"→  {prepared.elf_path.relative_to(paths.repo_root)} ({elf_bytes} B)"
+print(
+    f"Cross-compiling hybrid_loop_demo.c…  {compile_wall:4.1f} s  "
+    f"→  {prepared.elf_path.relative_to(paths.repo_root)} ({elf_bytes} B)"
+)
+print(
+    f"Ensuring Verilator simulator…        {sim_wall:4.1f} s  {sim_status}"
+)
+print()
+print(
+    "Toolchain ready. Live simulation lands at §End-to-end consequence; "
+    "middle sections read captures/hybrid_loop/."
+)
+print()
+print(
+    format_table(
+        ["elf path", "simulator binary", "capture trace bytes"],
+        [[
+            str(prepared.elf_path.relative_to(paths.repo_root)),
+            str(prepared.simulator_path),
+            capture_trace_bytes,
+        ]],
     )
-    print(
-        f"Ensuring Verilator simulator…        {sim_wall:4.1f} s  {sim_status}"
-    )
-    print()
-    print(
-        "Toolchain ready. Live simulation lands at §End-to-end consequence; "
-        "middle sections read captures/hybrid_loop/."
-    )
-    print()
-    print(
-        format_table(
-            ["toolchain", "elf path", "simulator binary", "capture trace bytes"],
-            [[
-                prepared.toolchain,
-                str(prepared.elf_path.relative_to(paths.repo_root)),
-                str(prepared.simulator_path),
-                capture_trace_bytes,
-            ]],
-        )
-    )
-else:
-    print(f"⚠  Toolchain unavailable: {prepared.reason}")
-    print(
-        "⚠  The notebook can still demonstrate every static piece "
-        "(ISA, R-type fields, path classification)"
-    )
-    print("⚠  from the checked-in captures/hybrid_loop/ archive.")
-    print(
-        "⚠  §End-to-end consequence will then fall back to the same "
-        "archive instead of running live."
-    )
-    print(
-        "⚠  (to enable the live simulation, run this notebook inside "
-        "the tutorial docker image)"
-    )
-    print()
-    print(
-        format_table(
-            ["toolchain", "elf path", "simulator binary", "capture trace bytes"],
-            [[prepared.toolchain, "—", "—", capture_trace_bytes]],
-        )
-    )
+)
 '''
 
 
@@ -557,7 +510,7 @@ print()
 print(f"  reconstructed from pack_q_set(rs1={rs1}, rs2={rs2}):")
 print(f"    0x{repacked:08x}")
 print()
-print("✓ trace = objdump = Python pack — same 32-bit custom0 word")
+print("✓ trace = objdump = Python pack: same 32-bit custom0 word")
 print(
     f"  (rs1=x{rs1}, rs2=x{rs2} are the real RISC-V registers the compiler "
     "allocated"
@@ -652,7 +605,6 @@ from dataclasses import dataclass
 
 @dataclass
 class LiveRun:
-    source: str
     trace_text: str
     log_text: str
     objdump_text: str
@@ -661,64 +613,39 @@ class LiveRun:
 
 run_dir = prepared.run_dir
 
-if prepared.toolchain == "ready":
-    t0 = time.perf_counter()
-    result = run_local_sim(
-        prepared.simulator_path,
-        prepared.elf_path,
-        run_dir,
-        chipyard_root=prepared.chipyard_root,
-        config_name=prepared.config_name,
-    )
-    wall = time.perf_counter() - t0
+t0 = time.perf_counter()
+result = run_local_sim(
+    prepared.simulator_path,
+    prepared.elf_path,
+    run_dir,
+    chipyard_root=prepared.chipyard_root,
+    config_name=prepared.config_name,
+)
+wall = time.perf_counter() - t0
 
-    trace_text = (run_dir / "hybrid_loop.trace.txt").read_text(encoding="utf-8")
-    log_text = (run_dir / "hybrid_loop.log").read_text(encoding="utf-8")
-    objdump_path = run_dir / "hybrid_loop.objdump.txt"
-    if not objdump_path.exists():
-        shutil.copyfile(
-            prepared.capture.objdump_path,
-            objdump_path,
-        )
-    objdump_text = objdump_path.read_text(encoding="utf-8")
+trace_text = (run_dir / "hybrid_loop.trace.txt").read_text(encoding="utf-8")
+log_text = (run_dir / "hybrid_loop.log").read_text(encoding="utf-8")
+objdump_path = run_dir / "hybrid_loop.objdump.txt"
+if not objdump_path.exists():
+    shutil.copyfile(
+        prepared.capture.objdump_path,
+        objdump_path,
+    )
+objdump_text = objdump_path.read_text(encoding="utf-8")
 
-    run = LiveRun(
-        source="live",
-        trace_text=trace_text,
-        log_text=log_text,
-        objdump_text=objdump_text,
-        run_dir=run_dir,
-    )
-    cycles = getattr(result, "cycle_count", None)
-    custom0 = getattr(result, "custom0_count", None)
-    iters_n = getattr(result, "iteration_count", 4)
-    print(
-        f"Running simulation…  {wall:4.1f} s  "
-        f"({cycles} cycles, {custom0} custom0 insts, {iters_n} iterations)"
-    )
-else:
-    # Fallback: copy captures into runs/hybrid_loop/ so runs/ layout
-    # matches the live path. Cells [15] / [16] then read from `run`
-    # regardless of live-vs-fallback.
-    for src_attr, dst_name in (
-        ("trace_path", "hybrid_loop.trace.txt"),
-        ("log_path", "hybrid_loop.log"),
-        ("objdump_path", "hybrid_loop.objdump.txt"),
-    ):
-        src = getattr(prepared.capture, src_attr)
-        shutil.copyfile(src, run_dir / dst_name)
-
-    run = LiveRun(
-        source="fallback",
-        trace_text=prepared.capture.trace_text,
-        log_text=prepared.capture.log_text,
-        objdump_text=prepared.capture.objdump_text,
-        run_dir=run_dir,
-    )
-    print(
-        "⚠  Toolchain missing — showing the checked-in capture instead "
-        "of a live run."
-    )
+run = LiveRun(
+    trace_text=trace_text,
+    log_text=log_text,
+    objdump_text=objdump_text,
+    run_dir=run_dir,
+)
+cycles = getattr(result, "cycle_count", None)
+custom0 = getattr(result, "custom0_count", None)
+iters_n = getattr(result, "iteration_count", 4)
+print(
+    f"Running simulation…  {wall:4.1f} s  "
+    f"({cycles} cycles, {custom0} custom0 insts, {iters_n} iterations)"
+)
 
 print()
 print("UART output (read from hybrid_loop.log):")
@@ -912,10 +839,10 @@ print(
 )
 print(
     "Once the program is in QCC, every subsequent iteration is an 8-byte "
-    "register"
+    "register write."
 )
 print(
-    "write — no recompile, no bulk DMA. That is the end-to-end consequence of"
+    "No recompile, no bulk DMA. That is the end-to-end consequence of"
 )
 print(
     "splitting host↔QCC traffic into two paths behind one ISA."
@@ -956,7 +883,7 @@ def build_notebook() -> dict[str, object]:
         markdown_cell(MD_END_TO_END, cell_id="8eb5cd77"),
         # Cell [13] md — End-to-end scope caveat (frozen)
         markdown_cell(MD_SCOPE_CAVEAT, cell_id="ff39d455"),
-        # Cell [14] code — end-to-end live simulation climax + fallback
+        # Cell [14] code — end-to-end live simulation climax
         code_cell(CODE_CELL_14_LIVE_SIM, cell_id="c14-live-sim"),
         # Cell [15] code — per-iteration objective line plot
         code_cell(CODE_CELL_15_OBJECTIVE_PLOT, cell_id="c15-objective-plot"),

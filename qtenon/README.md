@@ -6,6 +6,26 @@ Paper, slides, and discussion docs live one level up in `ISCA2025-Qtenon/`.
 
 ---
 
+## Quickstart (Docker — recommended)
+
+```bash
+docker pull janusq/qtenon:isca2026
+docker run --rm -p 127.0.0.1:8888:8888 janusq/qtenon:isca2026
+```
+
+Open the printed `http://localhost:8888/lab` URL and run the
+`qtenon_tutorial.ipynb` notebook end-to-end. Cells [3] / [14] cross-compile
+and run the Verilator simulator live inside the container — no local
+Python / Jupyter / RISC-V / Verilator setup needed. See
+[`docs/DOCKER.md`](docs/DOCKER.md) for the Apple Silicon note and the
+contributor rebuild flow.
+
+For contributors editing helpers or hardware sources, see
+[`docs/SETUP.md`](docs/SETUP.md) for the local-venv path and the validation environment
+contributor flow.
+
+---
+
 ## Workflow Split
 
 - **Default tutorial path**: local replay from checked-in artifacts under
