@@ -1,0 +1,12 @@
+qiskit<1.0.0
+matplotlib
+hyperopt>=0.2.7
+optax
+chex
+pylatexenc
+jax
+jaxlib
+dill
+qiskit_aer
+qiskit_aer_gpu
+
