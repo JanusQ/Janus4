@@ -669,8 +669,8 @@ plt.show()
 
 The Aer example above uses an artificial noise model. This section switches to
 processed experimental data included with the project. The code below only
-loads preprocessed artifacts and draws figures; it does not submit new hardware
-jobs or rerun the original calibration pipeline.
+loads preprocessed artifacts, summarizes them, and draws figures; it does not
+submit new hardware jobs or rerun the original calibration pipeline.
 
 To keep the tutorial environment lightweight, the plots use artifacts that can
 be loaded directly without the full `qutip`-dependent analysis notebooks:
