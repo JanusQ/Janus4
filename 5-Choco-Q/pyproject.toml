@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chocoq"
+version = "1.0.0"
+description = "Choco-Q tutorial package for Janus 4.0"
+requires-python = ">=3.10,<4"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["chocoq*"]
