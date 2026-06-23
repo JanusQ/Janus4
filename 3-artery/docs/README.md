@@ -8,7 +8,7 @@ The tutorial material is organized as:
 hw/interface/ Hardware interface contract and packet/datapath notes
 software/    Python-side S21 analysis, IQ demodulation, clustering, and prediction
 tools/       UDP board tests and GUI demo
-demo/        Numbered tutorial notebooks and result figures
+tutorial/    Numbered tutorial notebooks and result figures
 ```
 
 Recommended presentation flow:
@@ -18,11 +18,11 @@ Recommended presentation flow:
 3. Send S21/IQ data through UDP in the board demo.
 4. Display the returned branch decision, latency, and feedback waveform.
 
-The demo notebooks are split from the original software feedback notebook and expanded with ARTERY-specific explanations:
+The tutorial notebooks are split from the original software feedback notebook and expanded with ARTERY-specific explanations:
 
 ```text
-demo/ipynb/      Runnable tutorial notebooks
-demo/results/   Static figures used by the notebooks
+tutorial/ipynb/      Runnable tutorial notebooks
+tutorial/results/   Static figures used by the notebooks
 ```
 
 The full Vivado project is not stored in this tutorial topic. Only the packet format, datapath description, and Verilog interface wrapper are kept under `hw/interface/`.

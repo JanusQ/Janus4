@@ -9,7 +9,7 @@ docs/       Notes and tutorial documentation
 hw/         Hardware interface contract, not the full Vivado source tree
 software/   Python analysis library, API server, and demo scripts
 tools/      Host-side UDP test scripts and GUI demo
-demo/       Numbered notebooks and result figures
+tutorial/   Numbered notebooks and result figures
 ```
 
 ## Hardware Interface
@@ -72,12 +72,12 @@ python3 artery_remote_control.py
 
 The GUI can configure the bitstream, network parameters, S21 input file, FPGA programming command, UDP test command, and feedback waveform visualization.
 
-## Demo Notebooks
+## Tutorial Notebooks
 
 The numbered notebooks are under:
 
 ```text
-demo/ipynb/
+tutorial/ipynb/
 ```
 
 They are split and extended from the original software feedback analysis notebook. Each notebook keeps the runnable Python cells separate from the fixed result figures, then adds the ARTERY hardware/predictor interpretation.
@@ -97,5 +97,5 @@ Recommended order:
 Result figures used by the notebooks are under:
 
 ```text
-demo/results/
+tutorial/results/
 ```
