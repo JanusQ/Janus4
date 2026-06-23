@@ -174,6 +174,8 @@ MD_END_TO_END = """
 
 Now we put the two paths to work inside an actual VQE-style iteration loop. The pattern is simple: iteration 0 sets up the program (bulk, path ②); iterations 1..K only update the variational parameter (register, path ①). Nothing about the program structure changes across iterations, so recompilation is unnecessary and the whole iteration becomes a single-cycle parameter swap plus a `q_gen` / `q_run` / `q_acquire` triple.
 
+For this short demo, the target parameter pair is \((\theta_0,\theta_1)=(38,55)\). The notebook reports `progress_to_target`: 0% at the initial parameter pair and 100% when the loop reaches that target. The point is not to reproduce a physical VQE energy; it is to make the feedback loop visible while keeping the ISA/data-path story concrete.
+
 This is what the paper calls "dynamic incremental compilation" (§6.1). It is not an optimization added on top of the ISA. It is a direct consequence of having two separate datapaths and letting the ISA pick the one that matches the data shape.
 
 The second half of Act 3 covers fine-grained synchronization (§6.3): because the quantum controller cache writes to host memory via TileLink PUTs post-hoc, the host can start post-processing measurements from shot *i* while the controller is still running shots *i+1*, *i+2*, …:
@@ -185,7 +187,7 @@ The second half of Act 3 covers fine-grained synchronization (§6.3): because th
 MD_SCOPE_CAVEAT = """
 A note on scope before we dive in:
 
-- **What the capture shows:** per-iteration byte counts classified by datapath ① vs ②, plus a visual swimlane showing when the controller is busy with `q_run` and when the host CPU is free.
+- **What the capture shows:** per-iteration `progress_to_target`, byte counts classified by datapath ① vs ②, plus a visual swimlane showing when the controller is busy with `q_run` and when the host CPU is free.
 - **What the capture does not show:** the full ASIC timing behavior under realistic FENCE contention, or the 441.5× / 14.9× speedup numbers from the paper. Those require the 64-qubit workload and the ASIC host model (paper §7). Here we are showing that the ISA *permits* overlap and incremental updates; the magnitude numbers live in the slides.
 """
 
@@ -796,18 +798,32 @@ print(
 '''
 
 
-CODE_CELL_15_OBJECTIVE_PLOT = '''
+CODE_CELL_15_PROGRESS_PLOT = '''
 import matplotlib.pyplot as plt
 
 iters_data = parse_hybrid_output(run.log_text)
 assert len(iters_data) == 4, f"expected 4 iteration rows, got {len(iters_data)}"
 
+TARGET_THETA0 = 38
+TARGET_THETA1 = 55
+
+
+def distance_to_target(row):
+    return (row.theta0_idx - TARGET_THETA0) ** 2 + (row.theta1_idx - TARGET_THETA1) ** 2
+
+
+initial_distance = distance_to_target(iters_data[0])
+assert initial_distance > 0, "initial parameters already match the target"
+
 xs = [r.iteration for r in iters_data]
-ys_percent = [r.objective_ppm / 10_000 for r in iters_data]
+progress_percent = [
+    100.0 * (1.0 - distance_to_target(r) / initial_distance)
+    for r in iters_data
+]
 
 fig, ax = plt.subplots(figsize=(5.5, 3.0))
-ax.plot(xs, ys_percent, marker="o", linewidth=1.5)
-for r, y in zip(iters_data, ys_percent):
+ax.plot(xs, progress_percent, marker="o", linewidth=1.5)
+for r, y in zip(iters_data, progress_percent):
     ax.annotate(
         f"sb={r.sample_bits}",
         xy=(r.iteration, y),
@@ -818,10 +834,11 @@ for r, y in zip(iters_data, ys_percent):
     )
 
 ax.set_xlabel("iteration")
-ax.set_ylabel("objective (%)")
+ax.set_ylabel("progress_to_target (%)")
 ax.set_xticks(xs)
+ax.set_ylim(-5, 105)
 ax.grid(True, alpha=0.3)
-ax.set_title("Per-iteration objective (from hybrid_loop.log)")
+ax.set_title("Progress toward target θ=(38,55)")
 plt.tight_layout()
 plt.show()
 
@@ -831,14 +848,14 @@ table_rows = [
         r.theta0_idx,
         r.theta1_idx,
         r.sample_bits,
-        f"{r.objective_ppm/10_000:.4f}%",
+        f"{progress:.1f}%",
     ]
-    for r in iters_data
+    for r, progress in zip(iters_data, progress_percent)
 ]
 
 print(
     format_table(
-        ["iter", "θ₀", "θ₁", "sample_bits", "objective"],
+        ["iter", "θ₀", "θ₁", "sample_bits", "progress_to_target"],
         table_rows,
     )
 )
@@ -871,8 +888,6 @@ for r in iters_data:
         bytes_ii,
         bytes_i,
         "no",
-        r.sample_bits,
-        f"{r.objective_ppm/10_000:.4f}%",
     ])
 
 print(
@@ -883,8 +898,6 @@ print(
             "bytes ②",
             "bytes ①",
             "recompile",
-            "sample",
-            "objective",
         ],
         rows,
     )
@@ -946,8 +959,8 @@ def build_notebook() -> dict[str, object]:
         markdown_cell(MD_SCOPE_CAVEAT, cell_id="ff39d455"),
         # Cell [14] code — end-to-end simulation evidence
         code_cell(CODE_CELL_14_LIVE_SIM, cell_id="c14-live-sim"),
-        # Cell [15] code — per-iteration objective line plot
-        code_cell(CODE_CELL_15_OBJECTIVE_PLOT, cell_id="c15-objective-plot"),
+        # Cell [15] code — per-iteration progress line plot
+        code_cell(CODE_CELL_15_PROGRESS_PLOT, cell_id="c15-objective-plot"),
         # Cell [16] code — end-to-end comparison table
         code_cell(CODE_CELL_16_COMPARISON, cell_id="c16-comparison-table"),
         # Cell [17] md — What this notebook did and did not do (heading rename)
