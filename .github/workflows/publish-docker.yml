@@ -1,7 +1,24 @@
 name: Publish Docker image
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - .dockerignore
+      - .github/workflows/publish-docker.yml
+      - Dockerfile
+      - scripts/**
+      - 2-qtenon/**
+      - 3-artery/**
+      - 4-adaptDQC/**
+      - 5-Choco-Q/**
+      - 6-EXP-QRAM/**
   workflow_dispatch:
+
+concurrency:
+  group: publish-docker-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   publish:
@@ -28,6 +45,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: janusq/janus4:isca2026
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             QTENON_NOTEBOOK_TIMEOUT=1200
 
