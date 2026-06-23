@@ -8,7 +8,7 @@ The tutorial material is organized as:
 hw/interface/ Hardware interface contract and packet/datapath notes
 software/    Python-side S21 analysis, IQ demodulation, clustering, and prediction
 tools/       UDP board tests and GUI demo
-tutorial/    Numbered tutorial notebooks and result figures
+tutorial/    Single tutorial notebook and result figures
 ```
 
 Recommended presentation flow:
@@ -18,10 +18,10 @@ Recommended presentation flow:
 3. Send S21/IQ data through UDP in the board demo.
 4. Display the returned branch decision, latency, and feedback waveform.
 
-The tutorial notebooks are split from the original software feedback notebook and expanded with ARTERY-specific explanations:
+The tutorial notebook is split and expanded from the original software feedback notebook with ARTERY-specific explanations:
 
 ```text
-tutorial/ipynb/      Runnable tutorial notebooks
+tutorial/3_1_artery_feedback_tutorial.ipynb
 tutorial/results/   Static figures used by the notebooks
 ```
 
