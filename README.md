@@ -19,7 +19,7 @@ and `qram` for EXP-QRAM.
 ## Topics
 
 - **[`2-qtenon/`](2-qtenon/)** — Topic 2: low-latency quantum-classical hybrid control on a RISC-V + RoCC accelerator. Hybrid-loop demo with baked Verilator run artifacts in the Janus4 image.
-- **`3-artery/`** — Topic 3 placeholder.
+- **[`3-artery/`](3-artery/)** — Topic 3: ARTERY-style low-latency quantum feedback with S21/IQ analysis, trajectory prediction, hardware interface notes, and GUI/UDP demos.
 - **[`4-adaptDQC/`](4-adaptDQC/)** — Topic 4: adaptive distributed quantum computing with local Qiskit simulation in the `adaptiveqc` kernel.
 - **[`5-Choco-Q/`](5-Choco-Q/)** — Topic 5: constrained binary optimization with Choco-Q in the `chocoq` kernel.
 - **[`6-EXP-QRAM/`](6-EXP-QRAM/)** — Topic 6: bucket-brigade QRAM circuit construction, simulation, and processed data visualization in the `qram` kernel.
