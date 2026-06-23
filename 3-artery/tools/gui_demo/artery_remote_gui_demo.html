@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ARTERY Remote Control Demo</title>
+  <style>
+    :root {
+      --blue: #0068b7;
+      --blue-2: #0a7dc2;
+      --green: #2d9650;
+      --orange: #ef7e00;
+      --red: #c44e4e;
+      --ink: #1e2a3a;
+      --muted: #607086;
+      --line: #c9d6e5;
+      --panel: #f7fafd;
+      --soft: #eef4fa;
+      --dark: #202b3b;
+      --white: #ffffff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: var(--ink);
+      font-family: Aptos, "Segoe UI", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    .page {
+      width: 1600px;
+      min-height: 900px;
+      padding: 28px 44px 34px;
+      background: #fff;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 4px solid #a7b8ce;
+      padding-bottom: 14px;
+      margin-bottom: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .dot {
+      position: relative;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--blue-2);
+    }
+
+    .dot::after {
+      content: "";
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #d7e0ea;
+      right: -8px;
+      bottom: -8px;
+      z-index: -1;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 46px;
+      line-height: 1;
+      font-weight: 760;
+      color: #000;
+    }
+
+    .zju {
+      text-align: right;
+      color: var(--blue);
+      font-weight: 800;
+      font-size: 28px;
+      line-height: 1.05;
+    }
+
+    .zju span {
+      display: block;
+      font-size: 13px;
+      letter-spacing: 2px;
+      margin-top: 6px;
+      font-weight: 650;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr;
+      gap: 34px;
+    }
+
+    .section-title {
+      height: 38px;
+      background: var(--blue);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 760;
+      font-size: 22px;
+      margin-bottom: 18px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--panel);
+      padding: 18px;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .field {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 12px;
+      padding: 10px 12px;
+      min-height: 64px;
+    }
+
+    .field label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      margin-bottom: 6px;
+    }
+
+    .field .value {
+      font-size: 18px;
+      font-weight: 720;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 14px 0 18px;
+    }
+
+    .btn {
+      height: 46px;
+      border: 0;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 760;
+      font-family: inherit;
+      box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.18);
+    }
+
+    .btn.blue { background: var(--blue); }
+    .btn.orange { background: var(--orange); }
+    .btn.green { background: var(--green); }
+
+    .status-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .status {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-left: 6px solid var(--green);
+      border-radius: 12px;
+      padding: 11px 12px;
+      min-height: 74px;
+    }
+
+    .status.orange { border-left-color: var(--orange); }
+    .status.blue { border-left-color: var(--blue); }
+
+    .status .k {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 650;
+      margin-bottom: 5px;
+    }
+
+    .status .v {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--ink);
+    }
+
+    .diagram {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px 22px;
+      padding: 4px 6px 8px;
+    }
+
+    .module {
+      position: relative;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 12px;
+      min-height: 78px;
+      padding: 12px 12px 10px 17px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .module::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 6px;
+      background: var(--blue);
+      border-radius: 12px 0 0 12px;
+    }
+
+    .module.orange::before { background: var(--orange); }
+    .module.green::before { background: var(--green); }
+
+    .module strong {
+      display: block;
+      font-size: 17px;
+      line-height: 1.15;
+      margin-bottom: 6px;
+    }
+
+    .module span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .flow {
+      margin-top: 18px;
+    }
+
+    .steps {
+      padding: 10px 18px 12px;
+    }
+
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 8px 0;
+      font-size: 15px;
+    }
+
+    .num {
+      width: 19px;
+      height: 19px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: white;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      flex: 0 0 auto;
+    }
+
+    .terminal {
+      background: var(--dark);
+      color: #eaf0f6;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.45;
+      min-height: 170px;
+      border: 1px solid #37465a;
+    }
+
+    .terminal .ok { color: #8ee0a0; }
+    .terminal .warn { color: #ffd28a; }
+    .terminal .blue { color: #9bcaff; }
+
+    .wave-card {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: #fff;
+      padding: 18px 18px 10px;
+      margin-bottom: 24px;
+    }
+
+    .wave-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 10px;
+    }
+
+    .wave-title h2 {
+      margin: 0;
+      font-size: 22px;
+      color: var(--ink);
+    }
+
+    .wave-title .meta {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    svg {
+      width: 100%;
+      height: 290px;
+      display: block;
+      background: #fbfdff;
+      border: 1px solid #d8e2ef;
+      border-radius: 8px;
+    }
+
+    .legend {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+      justify-content: center;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .key {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .swatch {
+      width: 26px;
+      height: 4px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+
+    .swatch.blue { background: var(--blue-2); }
+    .swatch.orange { background: var(--orange); }
+
+    .verification {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .note {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-left: 6px solid var(--blue);
+      border-radius: 12px;
+      min-height: 74px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .note.orange { border-left-color: var(--orange); }
+    .note.green { border-left-color: var(--green); }
+
+    .note strong {
+      display: block;
+      font-size: 16px;
+      margin-bottom: 6px;
+    }
+
+    .note span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .footer {
+      margin-top: 26px;
+      background: var(--dark);
+      color: white;
+      border-radius: 8px;
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 780;
+    }
+
+    .small-note {
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      padding: 12px 16px;
+      color: var(--ink);
+      text-align: center;
+      font-size: 15px;
+    }
+
+    @media (max-width: 900px) {
+      .page {
+        width: auto;
+        min-height: auto;
+        padding: 18px;
+      }
+      .grid,
+      .controls,
+      .status-strip,
+      .verification {
+        grid-template-columns: 1fr;
+      }
+      .diagram {
+        grid-template-columns: 1fr;
+      }
+      h1 { font-size: 34px; }
+      .zju { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <div class="brand">
+        <div class="dot"></div>
+        <h1>Remote ARTERY Control Interface</h1>
+      </div>
+      <div class="zju">浙江大学<span>ZHEJIANG UNIVERSITY</span></div>
+    </header>
+
+    <section class="grid">
+      <div>
+        <div class="section-title">User Interface and Hardware Module Block Diagram</div>
+        <div class="panel">
+          <div class="controls">
+            <div class="field">
+              <label>SSH Target</label>
+              <div class="value">syyao@lab-host</div>
+            </div>
+            <div class="field">
+              <label>FPGA Board</label>
+              <div class="value">xczu47dr_0 / JTAG ready</div>
+            </div>
+            <div class="field">
+              <label>Input Waveform Data</label>
+              <div class="value">s21_data.mat · state 0 · shot 0</div>
+            </div>
+            <div class="field">
+              <label>Network Interface</label>
+              <div class="value">enp225s0f0 · 10 Gb/s</div>
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button class="btn blue">Connect SSH</button>
+            <button class="btn orange">Program FPGA</button>
+            <button class="btn green">Run UDP Test</button>
+          </div>
+
+          <div class="diagram" aria-label="hardware module block diagram">
+            <div class="module"><strong>GUI / SSH Client</strong><span>select S21 + pulse table</span></div>
+            <div class="module"><strong>10G UDP RX</strong><span>64-bit packets</span></div>
+            <div class="module"><strong>DDR Writer</strong><span>IQ + feedback data</span></div>
+            <div class="module"><strong>DDR4 Buffer</strong><span>sample and branch storage</span></div>
+            <div class="module"><strong>Waveform Executor</strong><span>PLAY / END schedule</span></div>
+            <div class="module"><strong>axi_datamover_256</strong><span>256-bit DDR stream</span></div>
+            <div class="module orange"><strong>Early ARTERY</strong><span>NCO, mixer, trajectory</span></div>
+            <div class="module orange"><strong>BHT + Bayesian</strong><span>threshold confidence</span></div>
+            <div class="module green"><strong>Feedback Selector</strong><span>branch0 / branch1 waveform</span></div>
+          </div>
+        </div>
+
+        <div class="flow">
+          <div class="section-title">Demo Flow</div>
+          <div class="panel steps">
+            <div class="step"><span class="num">1</span><span>Connect to the lab host through SSH and check JTAG / 10G link status</span></div>
+            <div class="step"><span class="num">2</span><span>Load S21 IQ data and feedback waveform table, then write packets to DDR</span></div>
+            <div class="step"><span class="num">3</span><span>One-click Vivado batch programming and automatic DDR calibration wait</span></div>
+            <div class="step"><span class="num">4</span><span>Run UDP test and plot predicted feedback waveform with measured latency</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">Prediction, Waveform and Latency Display</div>
+        <div class="wave-card">
+          <div class="wave-title">
+            <h2>Predicted Feedback Waveform</h2>
+            <div class="meta">selected branch: 1 · bad_words: 0</div>
+          </div>
+          <svg viewBox="0 0 720 290" role="img" aria-label="predicted feedback waveform">
+            <defs>
+              <pattern id="grid" width="40" height="32" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 32" fill="none" stroke="#e5edf5" stroke-width="1"/>
+              </pattern>
+            </defs>
+            <rect x="0" y="0" width="720" height="290" fill="url(#grid)"/>
+            <line x1="48" y1="232" x2="680" y2="232" stroke="#9caabc" stroke-width="1.5"/>
+            <line x1="48" y1="38" x2="48" y2="232" stroke="#9caabc" stroke-width="1.5"/>
+            <text x="42" y="26" text-anchor="middle" font-size="12" fill="#607086">amp</text>
+            <text x="676" y="254" text-anchor="end" font-size="12" fill="#607086">sample index</text>
+            <path d="M48 226 C82 224 112 214 140 190 C175 158 202 96 234 70 C266 44 298 55 328 96 C358 138 385 190 422 214 C465 242 540 230 680 228"
+                  fill="none" stroke="#0a7dc2" stroke-width="4"/>
+            <path d="M48 170 C88 172 125 179 160 190 C196 203 222 211 252 202 C285 192 310 160 340 140 C370 120 398 119 430 138 C470 162 520 194 680 202"
+                  fill="none" stroke="#ef7e00" stroke-width="3"/>
+            <circle cx="234" cy="70" r="5" fill="#0a7dc2"/>
+            <circle cx="340" cy="140" r="4" fill="#ef7e00"/>
+            <text x="248" y="65" font-size="12" fill="#1e2a3a">I pulse</text>
+            <text x="355" y="137" font-size="12" fill="#1e2a3a">Q correction</text>
+          </svg>
+          <div class="legend">
+            <span class="key"><span class="swatch blue"></span>I component</span>
+            <span class="key"><span class="swatch orange"></span>Q component</span>
+          </div>
+        </div>
+
+        <div class="status-strip">
+          <div class="status blue"><div class="k">Prediction</div><div class="v">branch 1</div></div>
+          <div class="status orange"><div class="k">Latency</div><div class="v">2.02 us</div></div>
+          <div class="status"><div class="k">Cycles @100 MHz</div><div class="v">202</div></div>
+          <div class="status"><div class="k">UDP Result</div><div class="v">received</div></div>
+        </div>
+
+        <div style="height:18px"></div>
+        <div class="section-title">Backend Log</div>
+        <div class="terminal">
+          <div><span class="blue">$</span> ssh syyao@lab-host</div>
+          <div><span class="ok">[ok]</span> Vivado 2024.2 detected · hw target xczu47dr_0</div>
+          <div><span class="blue">$</span> vivado -mode batch -source build_logs/program_latest.tcl</div>
+          <div><span class="ok">[ok]</span> bitstream programmed: TopCustomXczu47dr.bit</div>
+          <div><span class="blue">$</span> python3 tools/artery_ddr_latency_check.py --source s21 ...</div>
+          <div><span class="ok">[ok]</span> metadata=0xa5 · pred=1 · latency=202 cycles · 2.02 us</div>
+          <div><span class="ok">[ok]</span> waveform CSV exported · feedback plot updated</div>
+        </div>
+
+        <div style="height:18px"></div>
+        <div class="section-title">Verification Points</div>
+        <div class="verification">
+          <div class="note green"><strong>Remote programming</strong><span>Vivado hw_server / JTAG path active</span></div>
+          <div class="note"><strong>Visible data</strong><span>metadata, waveform CSV and plot</span></div>
+          <div class="note orange"><strong>Conclusion</strong><span>feedback path returns selected waveform</span></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="small-note">Captured GUI view for PPT: remote SSH workflow, one-click FPGA programming, UDP prediction test, feedback waveform visualization and latency display.</div>
+    <div class="footer">100 MHz | threshold early feedback | latency = 2.02 us | predicted feedback waveform displayed</div>
+  </main>
+</body>
+</html>
