@@ -14,7 +14,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
     QTENON_SMOKE_CACHE_DIR=/opt/qtenon-smoke-cache \
     CHOCOQ_VENV=/opt/chocoq-venv \
-    ADAPTDQC_VENV=/opt/adaptdqc-venv
+    ADAPTDQC_VENV=/opt/adaptdqc-venv \
+    QRAM_VENV=/opt/qram-venv
 
 WORKDIR /workspace
 
@@ -40,6 +41,11 @@ RUN python -m pip install --upgrade pip setuptools wheel uv \
     && uv venv --python 3.10 "${ADAPTDQC_VENV}" \
     && uv pip install --python "${ADAPTDQC_VENV}/bin/python" -r /tmp/adaptdqc-requirements.txt
 
+COPY 6-EXP-QRAM/requirements-docker.txt /tmp/qram-requirements.txt
+RUN uv python install 3.9 \
+    && uv venv --python 3.9 "${QRAM_VENV}" \
+    && uv pip install --python "${QRAM_VENV}/bin/python" -r /tmp/qram-requirements.txt
+
 COPY README.md LICENSE /workspace/
 COPY 4-adaptDQC/ /workspace/4-adaptDQC/
 COPY 5-Choco-Q/ /workspace/5-Choco-Q/
@@ -48,6 +54,11 @@ RUN "${CHOCOQ_VENV}/bin/python" -m pip install --no-cache-dir --no-deps -e /work
     && "${CHOCOQ_VENV}/bin/python" -m ipykernel install --prefix=/usr/local --name chocoq --display-name "Choco-Q"
 
 RUN "${ADAPTDQC_VENV}/bin/python" -m ipykernel install --prefix=/usr/local --name adaptiveqc --display-name "AdaptDQC"
+
+COPY 6-EXP-QRAM/ /workspace/6-EXP-QRAM/
+
+RUN uv pip install --python "${QRAM_VENV}/bin/python" --no-deps -e /workspace/6-EXP-QRAM \
+    && "${QRAM_VENV}/bin/python" -m ipykernel install --prefix=/usr/local --name qram --display-name "QRAM"
 
 EXPOSE 8888
 

@@ -13,7 +13,8 @@ docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/janus4:isca
 
 Open JupyterLab at `http://localhost:8888/lab`. The single Janus4 image
 contains the numbered topic tree and topic-specific kernels, including
-`qtenon-venv` for Qtenon and `chocoq` for Choco-Q.
+`qtenon-venv` for Qtenon, `adaptiveqc` for AdaptDQC, `chocoq` for Choco-Q,
+and `qram` for EXP-QRAM.
 
 ## Topics
 
@@ -21,7 +22,7 @@ contains the numbered topic tree and topic-specific kernels, including
 - **`3-artery/`** — Topic 3 placeholder.
 - **[`4-adaptDQC/`](4-adaptDQC/)** — Topic 4: adaptive distributed quantum computing with local Qiskit simulation in the `adaptiveqc` kernel.
 - **[`5-Choco-Q/`](5-Choco-Q/)** — Topic 5: constrained binary optimization with Choco-Q in the `chocoq` kernel.
-- **`6-EXP-QRAM/`** — Topic 6 placeholder.
+- **[`6-EXP-QRAM/`](6-EXP-QRAM/)** — Topic 6: bucket-brigade QRAM circuit construction, simulation, and processed data visualization in the `qram` kernel.
 
 ## Adding a new topic
 
