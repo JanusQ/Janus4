@@ -7,9 +7,11 @@ source "${SCRIPT_DIR}/qtenon_baked_cache.sh"
 
 IMAGE_TAG="${JANUS4_DOCKER_TAG:-janusq/janus4:isca2026}"
 PLATFORM_FLAG="${JANUS4_DOCKER_PLATFORM:-linux/amd64}"
+ARTERY_NOTEBOOK="3_1_artery_feedback_tutorial.ipynb"
 CHOCOQ_NOTEBOOK="tutorial/6_1_constrained_binary_optimization.ipynb"
 ADAPTDQC_NOTEBOOK="tutorial/adaptdqc_tutorial.ipynb"
 QRAM_NOTEBOOK="tutorial/qram_tutorial.ipynb"
+ARTERY_NOTEBOOK_TIMEOUT="${ARTERY_NOTEBOOK_TIMEOUT:-600}"
 QRAM_NOTEBOOK_TIMEOUT="${QRAM_NOTEBOOK_TIMEOUT:-600}"
 
 cd "${REPO_ROOT}"
@@ -17,6 +19,24 @@ cd "${REPO_ROOT}"
 docker build --platform "${PLATFORM_FLAG}" -t "${IMAGE_TAG}" .
 
 qtenon_verify_baked_cache "${IMAGE_TAG}" "${PLATFORM_FLAG}"
+
+docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/3-artery/software -i "${IMAGE_TAG}" /opt/artery-venv/bin/python - <<'PY'
+from pathlib import Path
+import gzip
+
+from quantum_feedback import QuantumFeedbackAnalyzer
+
+data_path = Path("/workspace/3-artery/tutorial/s21_data.mat.gz")
+if not data_path.is_file():
+    raise SystemExit(f"Missing Artery S21 dataset: {data_path}")
+
+with gzip.open(data_path, "rb") as source:
+    header = source.read(128)
+if not header.startswith(b"MATLAB"):
+    raise SystemExit("Artery S21 dataset does not look like a MAT file")
+
+print("Artery imports and S21 dataset passed")
+PY
 
 docker run --rm --platform "${PLATFORM_FLAG}" -i "${IMAGE_TAG}" /opt/chocoq-venv/bin/python - <<'PY'
 from chocoq.model import LinearConstrainedBinaryOptimization
@@ -40,6 +60,14 @@ from qram.qramtemplate.buckdatacell import Qram, cswap_depth, swap_depth
 
 print("QRAM imports passed")
 PY
+
+docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/3-artery/tutorial "${IMAGE_TAG}" \
+  python -m jupyter nbconvert \
+    --to notebook \
+    --execute "${ARTERY_NOTEBOOK}" \
+    --ExecutePreprocessor.kernel_name=artery \
+    --ExecutePreprocessor.timeout="${ARTERY_NOTEBOOK_TIMEOUT}" \
+    --output /tmp/artery-smoke.ipynb
 
 docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/5-Choco-Q "${IMAGE_TAG}" \
   python -m jupyter nbconvert \

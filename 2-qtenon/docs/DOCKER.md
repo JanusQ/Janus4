@@ -45,16 +45,19 @@ baked cache, normal notebook execution avoids that slow path.
 - `python:3.11-slim-bookworm` base
 - JupyterLab 4.x + ipykernel + nbformat + nbclient + matplotlib + numpy
 - `qtenon-venv` kernelspec (matches the venv-based name from `SETUP.md`)
+- `artery` kernelspec for the ARTERY feedback topic
+- `adaptiveqc` kernelspec for the AdaptDQC topic
 - `chocoq` kernelspec for the Choco-Q topic
+- `qram` kernelspec for the EXP-QRAM topic
 - RISC-V cross-compile toolchain at `/opt/qtenon-toolchain/` —
   `riscv64-unknown-elf-gcc` 12.2.0, `htif_nano.specs`, libgloss-htif, and
   matching libgmp / libmpfr / libmpc / libz
 - Pre-built Verilator simulator at `/usr/local/bin/qtenon-sim` and the
   Chipyard-built `libriscv.so` / `libdramsim.so` at `/opt/qtenon-sim-libs/`
   (resolved via `LD_LIBRARY_PATH`)
-- Tutorial content under `/workspace/`, including `2-qtenon/` and
-  `5-Choco-Q/` (host-only caches and generated outputs are excluded by the
-  root `.dockerignore`)
+- Tutorial content under `/workspace/`, including the numbered topic tree
+  `2-qtenon/` through `6-EXP-QRAM/` (host-only caches and generated outputs are
+  excluded by the root `.dockerignore`)
 - Environment hooks: `QTENON_RISCV_GCC`, `QTENON_SIMULATOR`,
   `LD_LIBRARY_PATH` are pre-set so `compile_elf` / `run_local_sim` find the
   bundled toolchain without a Chipyard tree on disk
@@ -75,7 +78,7 @@ baked cache, normal notebook execution avoids that slow path.
 
 The Janus4 image is built from the repository root. It uses
 `janusq/qtenon:isca2026` as the base layer for the Qtenon toolchain/simulator,
-then adds the numbered Janus4 topic tree and the Choco-Q kernel.
+then adds the numbered Janus4 topic tree and topic-specific kernels.
 
 If the Qtenon Verilator simulator or RISC-V toolchain changes, refresh and
 publish the Qtenon base image first. The historical base-image rebuild flow is:

@@ -2,7 +2,7 @@
 #
 # Qtenon needs the prebuilt RISC-V toolchain and Verilator simulator already
 # packaged in janusq/qtenon:isca2026. The Janus4 image layers the numbered
-# topic tree and the Choco-Q kernel on top so attendees use one container.
+# topic tree and topic-specific kernels on top so attendees use one container.
 
 FROM janusq/qtenon:isca2026
 
@@ -13,6 +13,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     QTENON_SMOKE_CACHE_DIR=/opt/qtenon-smoke-cache \
+    ARTERY_VENV=/opt/artery-venv \
     CHOCOQ_VENV=/opt/chocoq-venv \
     ADAPTDQC_VENV=/opt/adaptdqc-venv \
     QRAM_VENV=/opt/qram-venv
@@ -24,12 +25,17 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rm -rf /workspace/code \
+    && python -m venv "${ARTERY_VENV}" \
     && python -m venv "${CHOCOQ_VENV}"
 
 COPY 2-qtenon/ /workspace/2-qtenon/
 RUN cd /workspace/2-qtenon \
     && QTENON_NOTEBOOK_TIMEOUT="${QTENON_NOTEBOOK_TIMEOUT}" \
        bash tutorial/scripts/build_smoke_cache.sh
+
+COPY 3-artery/software/requirements.txt /tmp/artery-requirements.txt
+RUN "${ARTERY_VENV}/bin/python" -m pip install --upgrade pip setuptools wheel \
+    && "${ARTERY_VENV}/bin/python" -m pip install --no-cache-dir -r /tmp/artery-requirements.txt ipykernel
 
 COPY 5-Choco-Q/requirements.txt /tmp/chocoq-requirements.txt
 RUN "${CHOCOQ_VENV}/bin/python" -m pip install --upgrade pip setuptools wheel \
@@ -47,8 +53,12 @@ RUN uv python install 3.9 \
     && uv pip install --python "${QRAM_VENV}/bin/python" -r /tmp/qram-requirements.txt
 
 COPY README.md LICENSE /workspace/
+COPY 3-artery/ /workspace/3-artery/
 COPY 4-adaptDQC/ /workspace/4-adaptDQC/
 COPY 5-Choco-Q/ /workspace/5-Choco-Q/
+
+RUN "${ARTERY_VENV}/bin/python" -m pip install --no-cache-dir --no-deps -e /workspace/3-artery/software \
+    && "${ARTERY_VENV}/bin/python" -m ipykernel install --prefix=/usr/local --name artery --display-name "Artery"
 
 RUN "${CHOCOQ_VENV}/bin/python" -m pip install --no-cache-dir --no-deps -e /workspace/5-Choco-Q \
     && "${CHOCOQ_VENV}/bin/python" -m ipykernel install --prefix=/usr/local --name chocoq --display-name "Choco-Q"
