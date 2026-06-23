@@ -1,0 +1,74 @@
+name: Publish Docker image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Janus4 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: janusq/janus4:isca2026
+          build-args: |
+            QTENON_NOTEBOOK_TIMEOUT=1200
+
+      - name: Ensure Docker Hub repository is public
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          login_response="$(
+            curl -fsSL \
+              -H 'Content-Type: application/json' \
+              -X POST \
+              -d "$(jq -n --arg username "$DOCKERHUB_USERNAME" --arg password "$DOCKERHUB_TOKEN" '{username: $username, password: $password}')" \
+              https://hub.docker.com/v2/users/login/
+          )"
+          jwt="$(jq -r '.token // empty' <<<"$login_response")"
+          if [ -z "$jwt" ]; then
+            echo "Docker Hub login response did not include a token" >&2
+            exit 1
+          fi
+          set +e
+          for endpoint in \
+            https://hub.docker.com/v2/namespaces/janusq/repositories/janus4/ \
+            https://hub.docker.com/v2/repositories/janusq/janus4/
+          do
+            for auth_scheme in JWT Bearer
+            do
+              curl -fsSL \
+                -H "Authorization: ${auth_scheme} $jwt" \
+                -H 'Content-Type: application/json' \
+                -X PATCH \
+                -d '{"is_private": false}' \
+                "$endpoint" >/dev/null && exit 0
+            done
+          done
+          echo "Docker Hub visibility API did not accept the update; public pull verification will decide the job result."
+
+      - name: Verify anonymous pull access
+        run: |
+          set -euo pipefail
+          docker logout || true
+          docker buildx imagetools inspect janusq/janus4:isca2026 >/tmp/janus4-image.txt
+          cat /tmp/janus4-image.txt
