@@ -7,6 +7,7 @@ on:
     paths:
       - .dockerignore
       - .github/workflows/publish-docker.yml
+      - .vscode/**
       - Dockerfile
       - scripts/**
       - 2-qtenon/**

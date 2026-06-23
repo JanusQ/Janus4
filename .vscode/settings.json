@@ -1,0 +1,5 @@
+{
+  "jupyter.jupyterServerType": "local",
+  "python.defaultInterpreterPath": "/usr/local/bin/python",
+  "python.terminal.activateEnvironment": false
+}

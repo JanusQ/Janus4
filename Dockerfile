@@ -71,6 +71,8 @@ COPY 6-EXP-QRAM/ /workspace/6-EXP-QRAM/
 RUN uv pip install --python "${QRAM_VENV}/bin/python" --no-deps -e /workspace/6-EXP-QRAM \
     && "${QRAM_VENV}/bin/python" -m ipykernel install --prefix=/usr/local --name qram --display-name "QRAM"
 
+COPY .vscode/ /workspace/.vscode/
+
 EXPOSE 8888
 
 CMD ["jupyter", "lab", \

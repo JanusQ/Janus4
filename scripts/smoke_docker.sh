@@ -18,6 +18,25 @@ cd "${REPO_ROOT}"
 
 docker build --platform "${PLATFORM_FLAG}" -t "${IMAGE_TAG}" .
 
+docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace -i "${IMAGE_TAG}" python - <<'PY'
+import json
+import subprocess
+from pathlib import Path
+
+settings_path = Path("/workspace/.vscode/settings.json")
+settings = json.loads(settings_path.read_text())
+if settings.get("python.defaultInterpreterPath") != "/usr/local/bin/python":
+    raise SystemExit(f"{settings_path} does not pin /usr/local/bin/python")
+
+kernels = json.loads(
+    subprocess.check_output(["jupyter", "kernelspec", "list", "--json"], text=True)
+)
+if "qtenon" not in kernels["kernelspecs"]:
+    raise SystemExit("Missing qtenon kernelspec")
+
+print("VS Code/Jupyter workspace defaults passed")
+PY
+
 qtenon_verify_baked_cache "${IMAGE_TAG}" "${PLATFORM_FLAG}"
 
 docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/3-artery/software -i "${IMAGE_TAG}" /opt/artery-venv/bin/python - <<'PY'
