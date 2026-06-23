@@ -10,6 +10,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 TUTORIAL_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 CODE_ROOT="$(cd -- "${TUTORIAL_DIR}/.." && pwd)"
 REPO_ROOT="$(cd -- "${CODE_ROOT}/.." && pwd)"
+source "${REPO_ROOT}/scripts/qtenon_baked_cache.sh"
 
 IMAGE_TAG="${JANUS4_DOCKER_TAG:-janusq/janus4:isca2026}"
 PLATFORM_FLAG="${JANUS4_DOCKER_PLATFORM:-linux/amd64}"
@@ -22,8 +23,7 @@ fi
 echo "[smoke] building ${IMAGE_TAG} from ${REPO_ROOT}"
 docker build --platform "${PLATFORM_FLAG}" -t "${IMAGE_TAG}" "${REPO_ROOT}"
 
-echo "[smoke] running validate_notebook inside ${IMAGE_TAG}"
-docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/2-qtenon "${IMAGE_TAG}" \
-  python -m tutorial.validate_notebook
+echo "[smoke] checking baked validate_notebook cache inside ${IMAGE_TAG}"
+qtenon_verify_baked_cache "${IMAGE_TAG}" "${PLATFORM_FLAG}"
 
 echo "[smoke] OK"

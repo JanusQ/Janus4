@@ -19,10 +19,12 @@ local container; bind to `127.0.0.1` to keep it off the network). Open the
 URL, launch `2-qtenon/tutorial/qtenon_tutorial.ipynb`, select the
 `qtenon-venv` kernel, and run **Restart Kernel and Run All Cells**.
 
-Cells [3] (`compile_elf`) and [14] (`run_local_sim`) execute the **live** path
-inside the container — they cross-compile `hybrid_loop_demo.c` with the
-bundled RISC-V toolchain and run the bundled Verilator simulator, so editing
-the C source and re-running the cells reflects real retire-cycle deltas.
+Cells [3] (`compile_elf`) and [14] (`run_local_sim`) read the baked
+`tutorial/runs/hybrid_loop/` cache by default. That cache is generated during
+`docker build` from the bundled RISC-V toolchain and Verilator simulator, so
+normal attendee notebook runs avoid the slow simulation step. To force a fresh
+live run after editing the C source, launch the container with
+`-e QTENON_IGNORE_BAKED_CACHE=1`.
 
 ## Apple Silicon note
 
@@ -34,9 +36,9 @@ On Apple Silicon (M-series) Macs, Docker Desktop runs the image under Rosetta:
 docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/janus4:isca2026
 ```
 
-Expect roughly **3× slowdown** on the cell [14] simulation under Rosetta
-(≈ 5–6 min wallclock vs. ≈ 1–2 min on native amd64). All other cells finish
-in under a second; only the Verilator step is dominated by emulation cost.
+Expect roughly **3× slowdown** when forcing the cell [14] live simulation under
+Rosetta (≈ 5–6 min wallclock vs. ≈ 1–2 min on native amd64). With the default
+baked cache, normal notebook execution avoids that slow path.
 
 ## What's in the image
 
@@ -102,8 +104,13 @@ publish the Qtenon base image first. The historical base-image rebuild flow is:
    ```bash
    bash scripts/smoke_docker.sh
    ```
-   This rebuilds the shared image, validates the Qtenon notebook path, checks
-   Choco-Q imports, and executes the Choco-Q notebook.
+   During `docker build`, the Qtenon notebook is executed once and its
+   compiled ELF, simulator trace/log, and executed notebook are baked into the
+   image under `/opt/qtenon-smoke-cache/` and
+   `/workspace/2-qtenon/tutorial/runs/hybrid_loop/`. Later smoke runs only
+   verify that baked cache instead of re-running the slow notebook. Use
+   `--build-arg QTENON_NOTEBOOK_TIMEOUT=...` if the build-time validation
+   needs a larger per-cell timeout.
 6. **Push** to Docker Hub (requires `docker login` with a credential
    authorized on the `janusq` org):
    ```bash

@@ -12,6 +12,9 @@ dist/
 runs/
 5-Choco-Q/scale_*/
 5-Choco-Q/*.csv
+4-adaptDQC/data/
+4-adaptDQC/**/*.qpy
+4-adaptDQC/**/*.pkl
 .trellis/
 .git/
 .gitignore

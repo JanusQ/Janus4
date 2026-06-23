@@ -1,0 +1,30 @@
+[project]
+name = "adaptiveqc"
+version = "0.1.0"
+description = "AdaptDQC: adaptive distributed quantum computing tutorial environment"
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "numpy==1.23.5",
+    "pandas==1.5.2",
+    "qiskit==0.42.0",
+    "qiskit-terra==0.23.2",
+    "retworkx==0.12.1",
+    "rustworkx==0.12.1",
+    "qiskit-ibm-runtime==0.9.3",
+    "networkx>=2.8",
+    "scikit-learn>=1.2",
+    "setuptools<81",
+]
+
+[project.optional-dependencies]
+tutorial = [
+    "ipykernel",
+    "matplotlib",
+    "nbclient",
+    "nbconvert",
+    "nbformat",
+]
+
+[tool.uv]
+package = false

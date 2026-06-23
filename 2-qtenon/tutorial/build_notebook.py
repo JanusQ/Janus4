@@ -268,6 +268,7 @@ paths = TutorialPaths.discover(Path.cwd())
 
 
 CODE_CELL_3_PREPARE = '''
+import os
 import shutil
 import time
 from dataclasses import dataclass
@@ -282,31 +283,51 @@ class PreparedRun:
     run_dir: Path
     chipyard_root: Path
     config_name: str
+    uses_baked_cache: bool
 
 
 run_dir = paths.tutorial_dir / "runs" / "hybrid_loop"
-if run_dir.exists():
-    shutil.rmtree(run_dir)
-run_dir.mkdir(parents=True, exist_ok=True)
-
-t0 = time.perf_counter()
-elf_result = compile_elf(
-    paths.tests_dir / "hybrid_loop_demo.c",
+cache_files = [
     run_dir / "hybrid_loop.elf",
+    run_dir / "hybrid_loop.log",
+    run_dir / "hybrid_loop.objdump.txt",
+    run_dir / "hybrid_loop.trace.txt",
+]
+use_baked_cache = (
+    os.environ.get("QTENON_IGNORE_BAKED_CACHE") != "1"
+    and all(path.is_file() for path in cache_files)
 )
-compile_wall = time.perf_counter() - t0
-elf_path = Path(elf_result.elf_path)
-elf_bytes = elf_path.stat().st_size
 
-# Dump the fresh objdump so runs/ is self-contained.
-objdump_target = run_dir / "hybrid_loop.objdump.txt"
-if hasattr(elf_result, "objdump_text") and elf_result.objdump_text is not None:
-    objdump_target.write_text(elf_result.objdump_text, encoding="utf-8")
+if use_baked_cache:
+    elf_path = run_dir / "hybrid_loop.elf"
+    elf_bytes = elf_path.stat().st_size
+    compile_wall = 0.0
+    simulator_path = Path(os.environ.get("QTENON_SIMULATOR", "/usr/local/bin/qtenon-sim"))
+    sim_wall = 0.0
+    sim_status = "(baked cache; simulator build skipped)"
+else:
+    if run_dir.exists():
+        shutil.rmtree(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
 
-t1 = time.perf_counter()
-simulator_path = ensure_simulator(paths.chipyard_root, paths.config_name)
-sim_wall = time.perf_counter() - t1
-sim_status = "(no-op: binary already built)"
+    t0 = time.perf_counter()
+    elf_result = compile_elf(
+        paths.tests_dir / "hybrid_loop_demo.c",
+        run_dir / "hybrid_loop.elf",
+    )
+    compile_wall = time.perf_counter() - t0
+    elf_path = Path(elf_result.elf_path)
+    elf_bytes = elf_path.stat().st_size
+
+    # Dump the fresh objdump so runs/ is self-contained.
+    objdump_target = run_dir / "hybrid_loop.objdump.txt"
+    if hasattr(elf_result, "objdump_text") and elf_result.objdump_text is not None:
+        objdump_target.write_text(elf_result.objdump_text, encoding="utf-8")
+
+    t1 = time.perf_counter()
+    simulator_path = ensure_simulator(paths.chipyard_root, paths.config_name)
+    sim_wall = time.perf_counter() - t1
+    sim_status = "(no-op: binary already built)"
 
 capture = load_capture_static(paths.captures_dir, "hybrid_loop")
 
@@ -317,20 +338,27 @@ prepared = PreparedRun(
     run_dir=run_dir,
     chipyard_root=paths.chipyard_root,
     config_name=paths.config_name,
+    uses_baked_cache=use_baked_cache,
 )
 
 capture_trace_bytes = len(capture.trace_text.encode("utf-8"))
 
-print(
-    f"Cross-compiling hybrid_loop_demo.c…  {compile_wall:4.1f} s  "
-    f"→  {prepared.elf_path.relative_to(paths.repo_root)} ({elf_bytes} B)"
-)
+if use_baked_cache:
+    print(
+        f"Using baked Qtenon run cache…      {compile_wall:4.1f} s  "
+        f"→  {prepared.elf_path.relative_to(paths.repo_root)} ({elf_bytes} B)"
+    )
+else:
+    print(
+        f"Cross-compiling hybrid_loop_demo.c…  {compile_wall:4.1f} s  "
+        f"→  {prepared.elf_path.relative_to(paths.repo_root)} ({elf_bytes} B)"
+    )
 print(
     f"Ensuring Verilator simulator…        {sim_wall:4.1f} s  {sim_status}"
 )
 print()
 print(
-    "Toolchain ready. Live simulation lands at §End-to-end consequence; "
+    "Toolchain ready. Simulation evidence lands at §End-to-end consequence; "
     "middle sections read captures/hybrid_loop/."
 )
 print()
@@ -598,9 +626,11 @@ print(
 
 
 CODE_CELL_14_LIVE_SIM = '''
+import os
 import shutil
 import time
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 
 @dataclass
@@ -612,26 +642,56 @@ class LiveRun:
 
 
 run_dir = prepared.run_dir
+use_baked_cache = (
+    getattr(prepared, "uses_baked_cache", False)
+    and os.environ.get("QTENON_IGNORE_BAKED_CACHE") != "1"
+)
 
 t0 = time.perf_counter()
-result = run_local_sim(
-    prepared.simulator_path,
-    prepared.elf_path,
-    run_dir,
-    chipyard_root=prepared.chipyard_root,
-    config_name=prepared.config_name,
-)
+if use_baked_cache:
+    trace_text = (run_dir / "hybrid_loop.trace.txt").read_text(encoding="utf-8")
+    log_text = (run_dir / "hybrid_loop.log").read_text(encoding="utf-8")
+    objdump_path = run_dir / "hybrid_loop.objdump.txt"
+    if not objdump_path.exists():
+        shutil.copyfile(
+            prepared.capture.objdump_path,
+            objdump_path,
+        )
+    objdump_text = objdump_path.read_text(encoding="utf-8")
+    parsed_for_counts = [
+        entry
+        for entry in parse_trace_text(trace_text)
+        if entry.command is not None
+    ]
+    cycle_count = 0
+    for entry in reversed(parsed_for_counts):
+        if entry.cycle is not None:
+            cycle_count = entry.cycle
+            break
+    result = SimpleNamespace(
+        cycle_count=cycle_count,
+        custom0_count=len(parsed_for_counts),
+        iteration_count=4,
+    )
+else:
+    result = run_local_sim(
+        prepared.simulator_path,
+        prepared.elf_path,
+        run_dir,
+        chipyard_root=prepared.chipyard_root,
+        config_name=prepared.config_name,
+    )
+    trace_text = (run_dir / "hybrid_loop.trace.txt").read_text(encoding="utf-8")
+    log_text = (run_dir / "hybrid_loop.log").read_text(encoding="utf-8")
+    objdump_path = run_dir / "hybrid_loop.objdump.txt"
+    if not objdump_path.exists():
+        shutil.copyfile(
+            prepared.capture.objdump_path,
+            objdump_path,
+        )
+    objdump_text = objdump_path.read_text(encoding="utf-8")
 wall = time.perf_counter() - t0
 
-trace_text = (run_dir / "hybrid_loop.trace.txt").read_text(encoding="utf-8")
-log_text = (run_dir / "hybrid_loop.log").read_text(encoding="utf-8")
-objdump_path = run_dir / "hybrid_loop.objdump.txt"
-if not objdump_path.exists():
-    shutil.copyfile(
-        prepared.capture.objdump_path,
-        objdump_path,
-    )
-objdump_text = objdump_path.read_text(encoding="utf-8")
 
 run = LiveRun(
     trace_text=trace_text,
@@ -642,8 +702,9 @@ run = LiveRun(
 cycles = getattr(result, "cycle_count", None)
 custom0 = getattr(result, "custom0_count", None)
 iters_n = getattr(result, "iteration_count", 4)
+run_label = "Using baked simulation cache" if use_baked_cache else "Running simulation"
 print(
-    f"Running simulation…  {wall:4.1f} s  "
+    f"{run_label}…  {wall:4.1f} s  "
     f"({cycles} cycles, {custom0} custom0 insts, {iters_n} iterations)"
 )
 
@@ -883,7 +944,7 @@ def build_notebook() -> dict[str, object]:
         markdown_cell(MD_END_TO_END, cell_id="8eb5cd77"),
         # Cell [13] md — End-to-end scope caveat (frozen)
         markdown_cell(MD_SCOPE_CAVEAT, cell_id="ff39d455"),
-        # Cell [14] code — end-to-end live simulation climax
+        # Cell [14] code — end-to-end simulation evidence
         code_cell(CODE_CELL_14_LIVE_SIM, cell_id="c14-live-sim"),
         # Cell [15] code — per-iteration objective line plot
         code_cell(CODE_CELL_15_OBJECTIVE_PLOT, cell_id="c15-objective-plot"),

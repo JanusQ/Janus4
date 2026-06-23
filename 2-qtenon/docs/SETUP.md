@@ -22,9 +22,10 @@ docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/janus4:isca
 
 Opens JupyterLab on `http://localhost:8888/lab` with the tutorial notebook
 ready to run end-to-end at `2-qtenon/tutorial/qtenon_tutorial.ipynb`
-(cells [3] / [14] cross-compile and run the Verilator simulator live inside
-the container). See [`DOCKER.md`](DOCKER.md) for the full attendee guide and
-the contributor rebuild flow.
+(cells [3] / [14] use the baked Qtenon run cache by default, with
+`QTENON_IGNORE_BAKED_CACHE=1` available for a fresh live run). See
+[`DOCKER.md`](DOCKER.md) for the full attendee guide and the contributor
+rebuild flow.
 
 ## Local Python Environment
 

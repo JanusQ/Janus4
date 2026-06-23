@@ -17,9 +17,9 @@ contains the numbered topic tree and topic-specific kernels, including
 
 ## Topics
 
-- **[`2-qtenon/`](2-qtenon/)** — Topic 2: low-latency quantum-classical hybrid control on a RISC-V + RoCC accelerator. Hybrid-loop demo with live Verilator simulation in the Janus4 image.
+- **[`2-qtenon/`](2-qtenon/)** — Topic 2: low-latency quantum-classical hybrid control on a RISC-V + RoCC accelerator. Hybrid-loop demo with baked Verilator run artifacts in the Janus4 image.
 - **`3-artery/`** — Topic 3 placeholder.
-- **`4-adaptDQC/`** — Topic 4 placeholder.
+- **[`4-adaptDQC/`](4-adaptDQC/)** — Topic 4: adaptive distributed quantum computing with local Qiskit simulation in the `adaptiveqc` kernel.
 - **[`5-Choco-Q/`](5-Choco-Q/)** — Topic 5: constrained binary optimization with Choco-Q in the `chocoq` kernel.
 - **`6-EXP-QRAM/`** — Topic 6 placeholder.
 
