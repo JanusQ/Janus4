@@ -103,5 +103,5 @@ tutorial/results/
 The figures exported directly from the original analysis notebook are kept under:
 
 ```text
-tutorial/results/original_notebook/
+tutorial/original_notebook/
 ```
