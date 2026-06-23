@@ -80,6 +80,14 @@ The tutorial notebook is:
 tutorial/3_1_artery_feedback_tutorial.ipynb
 ```
 
+The S21 dataset is included as a compressed MAT file:
+
+```text
+tutorial/s21_data.mat.gz
+```
+
+The notebook automatically extracts it to a temporary directory before loading the data.
+
 It is merged and extended from the original software feedback analysis notebook. The notebook keeps the runnable Python cells separate from the fixed result figures, then adds the ARTERY hardware/predictor interpretation.
 
 The notebook covers:
