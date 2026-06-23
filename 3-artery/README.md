@@ -1,15 +1,33 @@
 # ARTERY Feedback Tutorial
 
-This repository contains the reproduced ARTERY feedback demo used for the ISCA tutorial presentation.
+Topic 3 of the Janus 4.0 tutorial provides an ARTERY-style low-latency quantum feedback demo with S21/IQ analysis, trajectory prediction, and hardware interface notes.
 
-This topic follows the tutorial topic layout:
+## Layout
 
-```text
-docs/       Notes and tutorial documentation
-hw/         Hardware interface contract, not the full Vivado source tree
-software/   Python analysis library, API server, and demo scripts
-tools/      Host-side UDP test scripts and GUI demo
-tutorial/   Single tutorial notebook and result figures
+- `tutorial/3_1_artery_feedback_tutorial.ipynb` is the attendee-facing notebook.
+- `tutorial/s21_data.mat.gz` contains the compressed S21 readout dataset used by the notebook.
+- `tutorial/original_notebook/` contains result figures exported from the original software feedback analysis notebook.
+- `software/` contains the Python analysis package, examples, and API server.
+- `hw/interface/` contains the packet format, datapath description, and Verilog interface boundary, not the full Vivado project.
+- `tools/` contains host-side UDP test scripts and GUI utilities for the board demo.
+
+## Docker
+
+ARTERY runs inside the shared Janus4 tutorial image:
+
+```bash
+docker pull janusq/janus4:isca2026
+docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/janus4:isca2026
+```
+
+Then open `3-artery/tutorial/3_1_artery_feedback_tutorial.ipynb`
+and select the `ARTERY` kernel. The notebook automatically extracts
+`tutorial/s21_data.mat.gz` to a temporary directory before loading the S21 data.
+
+For a quick import and notebook execution check:
+
+```bash
+3-artery/scripts/smoke_docker.sh
 ```
 
 ## Hardware Interface
@@ -24,94 +42,3 @@ hw/interface/
 ```
 
 This documents the UDP/DDR/readout stream, ARTERY feedback decision metadata, and feedback waveform output interface.
-
-## Software Quick Start
-
-```bash
-cd software
-conda create -n qfeedback python=3.10
-conda activate qfeedback
-pip install -r requirements.txt
-pip install -e .
-```
-
-Place `s21_data.mat` in `software/` before running the demo:
-
-```bash
-python example_library_usage.py
-```
-
-## API Demo
-
-```bash
-cd software
-python3 api_server.py
-```
-
-The service runs at:
-
-```text
-http://localhost:5000
-```
-
-Main endpoints:
-
-```text
-POST /api/load
-POST /api/cluster
-POST /api/optimize
-POST /api/predict
-```
-
-## GUI Demo
-
-```bash
-cd tools/gui_demo
-python3 artery_remote_control.py
-```
-
-The GUI can configure the bitstream, network parameters, S21 input file, FPGA programming command, UDP test command, and feedback waveform visualization.
-
-## Tutorial Notebook
-
-The tutorial notebook is:
-
-```text
-tutorial/3_1_artery_feedback_tutorial.ipynb
-```
-
-The S21 dataset is included as a compressed MAT file:
-
-```text
-tutorial/s21_data.mat.gz
-```
-
-The notebook automatically extracts it to a temporary directory before loading the data.
-
-It is merged and extended from the original software feedback analysis notebook. The notebook keeps the runnable Python cells separate from the fixed result figures, then adds the ARTERY hardware/predictor interpretation.
-
-In the Janus4 Docker image, run this notebook with the `artery` Jupyter kernel.
-
-The notebook covers:
-
-```text
-1. ARTERY feedback overview
-2. S21 data loading
-3. IQ demodulation
-4. State classification
-5. Segmented demodulation and early prediction
-6. Trajectory/window search
-7. BHT-style prediction and hardware interface mapping
-```
-
-Result figures used by the notebooks are under:
-
-```text
-tutorial/results/
-```
-
-The figures exported directly from the original analysis notebook are kept under:
-
-```text
-tutorial/original_notebook/
-```
