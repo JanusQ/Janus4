@@ -19,6 +19,7 @@ project/project/
 .bloop/
 *.class
 *.log
+!tutorial/captures/**/*.log
 
 # Generated from Chisel / FIRRTL / Verilator
 gen-collateral/
@@ -55,4 +56,3 @@ Thumbs.db
 # Local config
 .env
 local_config.json
-
