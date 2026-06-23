@@ -15,7 +15,7 @@ docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/janus4:isca
 
 Open the printed `http://localhost:8888/lab` URL and run the
 `2-qtenon/tutorial/qtenon_tutorial.ipynb` notebook end-to-end with the
-`qtenon-venv` kernel. The image bakes the expensive Qtenon compile/simulation
+`qtenon` kernel. The image bakes the expensive Qtenon compile/simulation
 artifacts during `docker build`, so normal notebook runs read the cached
 `tutorial/runs/hybrid_loop/` files instead of re-running the slow Verilator
 step. Set `QTENON_IGNORE_BAKED_CACHE=1` before launching the container when a

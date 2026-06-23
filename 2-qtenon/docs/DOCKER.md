@@ -1,7 +1,7 @@
 # Janus4 Docker — recommended attendee path
 
 The Janus4 tutorial ships as one Docker image. Qtenon runs inside that image
-with its own `qtenon-venv` kernel, so attendees can run the notebook end-to-end
+with its own `qtenon` kernel, so attendees can run the notebook end-to-end
 (cross-compile + Verilator simulation included) without installing a local
 Python / Jupyter / RISC-V / Verilator toolchain.
 
@@ -17,7 +17,7 @@ docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/janus4:isca
 The container prints `http://localhost:8888/lab` (auth disabled — single-user
 local container; bind to `127.0.0.1` to keep it off the network). Open the
 URL, launch `2-qtenon/tutorial/qtenon_tutorial.ipynb`, select the
-`qtenon-venv` kernel, and run **Restart Kernel and Run All Cells**.
+`qtenon` kernel, and run **Restart Kernel and Run All Cells**.
 
 Cells [3] (`compile_elf`) and [14] (`run_local_sim`) read the baked
 `tutorial/runs/hybrid_loop/` cache by default. That cache is generated during
@@ -44,7 +44,7 @@ baked cache, normal notebook execution avoids that slow path.
 
 - `python:3.11-slim-bookworm` base
 - JupyterLab 4.x + ipykernel + nbformat + nbclient + matplotlib + numpy
-- `qtenon-venv` kernelspec (matches the venv-based name from `SETUP.md`)
+- `qtenon` kernelspec for the Qtenon topic
 - `artery` kernelspec for the ARTERY feedback topic
 - `adaptiveqc` kernelspec for the AdaptDQC topic
 - `chocoq` kernelspec for the Choco-Q topic

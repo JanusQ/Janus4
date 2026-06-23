@@ -29,6 +29,7 @@ RUN rm -rf /workspace/code \
     && python -m venv "${CHOCOQ_VENV}"
 
 COPY 2-qtenon/ /workspace/2-qtenon/
+RUN python -m ipykernel install --prefix=/usr/local --name qtenon --display-name "Qtenon"
 RUN cd /workspace/2-qtenon \
     && QTENON_NOTEBOOK_TIMEOUT="${QTENON_NOTEBOOK_TIMEOUT}" \
        bash tutorial/scripts/build_smoke_cache.sh

@@ -47,7 +47,7 @@ runtime into the same `.venv`:
 
 ```bash
 python -m pip install ipykernel nbformat nbclient IPython jupyterlab
-python -m ipykernel install --prefix ./.venv --name qtenon-venv --display-name "Qtenon .venv"
+python -m ipykernel install --prefix ./.venv --name qtenon --display-name "Qtenon"
 ```
 
 If Qiskit is available or needed for legacy LUT generation:

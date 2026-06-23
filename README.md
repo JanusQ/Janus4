@@ -13,7 +13,7 @@ docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/janus4:isca
 
 Open JupyterLab at `http://localhost:8888/lab`. The single Janus4 image
 contains the numbered topic tree and topic-specific kernels, including
-`qtenon-venv` for Qtenon, `artery` for ARTERY, `adaptiveqc` for AdaptDQC,
+`qtenon` for Qtenon, `artery` for ARTERY, `adaptiveqc` for AdaptDQC,
 `chocoq` for Choco-Q, and `qram` for EXP-QRAM.
 
 ## Topics

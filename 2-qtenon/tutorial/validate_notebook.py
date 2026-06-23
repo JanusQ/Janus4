@@ -22,7 +22,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--kernel",
-        default="qtenon-venv",
+        default="qtenon",
         help="Kernel name to use for execution.",
     )
     parser.add_argument(

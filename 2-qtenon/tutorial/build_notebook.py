@@ -958,9 +958,9 @@ def build_notebook() -> dict[str, object]:
         "cells": cells,
         "metadata": {
             "kernelspec": {
-                "display_name": "Python 3",
+                "display_name": "Qtenon",
                 "language": "python",
-                "name": "python3",
+                "name": "qtenon",
             },
             "language_info": {
                 "name": "python",
