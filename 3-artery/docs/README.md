@@ -25,4 +25,6 @@ tutorial/3_1_artery_feedback_tutorial.ipynb
 tutorial/results/   Static figures used by the notebooks
 ```
 
+Original notebook output figures are also kept in `tutorial/results/original_notebook/` and referenced by the tutorial notebook.
+
 The full Vivado project is not stored in this tutorial topic. Only the packet format, datapath description, and Verilog interface wrapper are kept under `hw/interface/`.

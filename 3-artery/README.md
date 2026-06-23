@@ -99,3 +99,9 @@ Result figures used by the notebooks are under:
 ```text
 tutorial/results/
 ```
+
+The figures exported directly from the original analysis notebook are kept under:
+
+```text
+tutorial/results/original_notebook/
+```
