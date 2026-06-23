@@ -90,6 +90,8 @@ The notebook automatically extracts it to a temporary directory before loading t
 
 It is merged and extended from the original software feedback analysis notebook. The notebook keeps the runnable Python cells separate from the fixed result figures, then adds the ARTERY hardware/predictor interpretation.
 
+In the Janus4 Docker image, run this notebook with the `artery` Jupyter kernel.
+
 The notebook covers:
 
 ```text
