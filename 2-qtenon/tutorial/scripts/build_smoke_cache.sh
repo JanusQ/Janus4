@@ -41,12 +41,14 @@ missing = [str(path) for path in required if not path.is_file()]
 if missing:
     raise SystemExit("Qtenon build cache is incomplete: " + ", ".join(missing))
 
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
 
 metadata = {
     "built_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -61,7 +63,8 @@ metadata = {
     },
 }
 cache_dir.mkdir(parents=True, exist_ok=True)
-(cache_dir / "metadata.json").write_text(
+cache_metadata = cache_dir / "metadata.json"
+cache_metadata.write_text(
     json.dumps(metadata, indent=2, sort_keys=True),
     encoding="utf-8",
 )
