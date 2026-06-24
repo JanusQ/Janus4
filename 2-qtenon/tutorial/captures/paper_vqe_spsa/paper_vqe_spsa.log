@@ -1,0 +1,26 @@
+[UART] UART0 is here (stdin/stdout).
+paper_vqe_spsa,v3
+metric,qubits,64
+metric,shots,500
+metric,iterations,10
+metric,parameters,256
+metric,q_set_calls,64
+metric,q_update_calls,5376
+metric,q_gen_calls,20
+metric,q_run_calls,20
+metric,q_acquire_calls,20
+metric,setup_cycles,275
+metric,update_cycles,101535
+metric,q_gen_issue_cycles,58
+metric,q_run_issue_cycles,40
+metric,acquire_wait_cycles,40
+metric,host_processing_cycles,172409
+metric,total_cycles,278089
+metric,qtenon_host_cycles_rdcycle,1338504
+metric,qtenon_schedule_removed_cycles_rdcycle,3356063
+metric,qtenon_without_software_host_cycles_rdcycle,4694567
+metric,qtenon_host_target_cycles,1338502
+metric,qtenon_schedule_removed_target_cycles,3356063
+metric,checksum,2821959758
+paper_vqe_spsa,done
+- chipyard-checkout/sims/verilator/generated-src/chipyard.harness.TestHarness.QChipRocketConfig/gen-collateral/TestDriver.v:158: Verilog $finish
