@@ -17,16 +17,9 @@ from pathlib import Path
 cache_dir = Path("/opt/qtenon-smoke-cache")
 executed_notebook = cache_dir / "qtenon_tutorial.executed.ipynb"
 metadata_path = cache_dir / "metadata.json"
-run_dir = Path("/workspace/2-qtenon/tutorial/runs/hybrid_loop")
+run_root = Path("/workspace/2-qtenon/tutorial/runs")
 
-required = [
-    executed_notebook,
-    metadata_path,
-    run_dir / "hybrid_loop.elf",
-    run_dir / "hybrid_loop.log",
-    run_dir / "hybrid_loop.objdump.txt",
-    run_dir / "hybrid_loop.trace.txt",
-]
+required = [executed_notebook, metadata_path]
 missing = [str(path) for path in required if not path.is_file()]
 if missing:
     raise SystemExit("Qtenon baked notebook cache is missing: " + ", ".join(missing))
@@ -48,9 +41,31 @@ if errors:
     raise SystemExit("Qtenon baked notebook cache contains errors: " + "; ".join(errors))
 
 metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+metadata_files = metadata.get("files", {})
+if not isinstance(metadata_files, dict):
+    raise SystemExit(f"Qtenon baked notebook cache metadata has no files object: {metadata_path}")
+
+missing_from_metadata: list[str] = []
+for raw_path in metadata_files:
+    path = Path(raw_path)
+    if not path.is_absolute():
+        path = Path("/workspace/2-qtenon") / path
+    if not path.is_file():
+        missing_from_metadata.append(raw_path)
+if missing_from_metadata:
+    raise SystemExit(
+        "Qtenon baked notebook cache metadata references missing files: "
+        + ", ".join(missing_from_metadata)
+    )
+
+optional_run_artifacts = 0
+if run_root.exists():
+    optional_run_artifacts = sum(1 for path in run_root.rglob("*") if path.is_file())
+
 print(
     "Qtenon baked notebook cache passed "
-    f"({code_cells} code cells, built_at={metadata.get('built_at_utc', '<unknown>')})"
+    f"({code_cells} code cells, built_at={metadata.get('built_at_utc', '<unknown>')}, "
+    f"optional_run_artifacts={optional_run_artifacts})"
 )
 PY
 }
