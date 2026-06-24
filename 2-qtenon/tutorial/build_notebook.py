@@ -1,10 +1,8 @@
-"""Generate the Qtenon tutorial notebook from v3 18-cell layout.
+"""Generate the Qtenon tutorial notebook from v4 layout.
 
 Cell list follows `.trellis/tasks/04-21-qtenon-demo-rewrite/cell_specs.md`
-(v3, 9 markdown + 9 code). This generator writes the cell templates only;
-cell templates may reference helpers that live in demo-rewrite's future
-patch (Option A). `nbconvert --execute` is intentionally not expected to
-succeed here until that helper work lands.
+for the mechanism walkthrough, then appends a paper-figure reproduction
+section for the VQE/SPSA time breakdown.
 """
 
 from __future__ import annotations
@@ -44,7 +42,7 @@ MD_WHY_QTENON = """
 
 This notebook is the hands-on companion to the Qtenon section of the Janus 4.0 tutorial. Every cell is meant to be read alongside the corresponding slide; the story is the shift from a decoupled host + FPGA-controller + quantum architecture to a tightly coupled RISC-V core whose ISA treats quantum programs as computable data.
 
-The paper claim we are servicing: end-to-end hybrid workloads run up to 14.9× faster than state-of-the-art decoupled architectures (Qtenon, ISCA 2025). This notebook does not reproduce that speedup number. It reproduces the mechanisms that produce it, at a scale small enough to run entirely on the local machine in under a minute.
+The paper claim we are servicing: end-to-end hybrid workloads run up to 14.9× faster than state-of-the-art decoupled architectures (Qtenon, ISCA 2025). This notebook does not reproduce the full speedup sweep. It first reproduces the mechanisms that produce it, then reruns one paper benchmark and redraws one paper experiment figure from the benchmark metrics plus the paper's evaluation assumptions.
 
 ## Why Qtenon exists
 
@@ -63,39 +61,37 @@ The root cause is architectural: today's systems put a decoupled FPGA controller
 
 *(Table 1 of the paper, §3.)*
 
-The rest of this notebook turns each row of that table into code you can read and cycle counts you can check.
+The rest of this notebook turns the programming-model and data-movement parts of that table into code you can read and trace events you can check. The final paper-figure section uses the VQE/SPSA benchmark metrics and the paper Section 7 timing assumptions to regenerate the `time_breakdown` plot data.
 
 ![Qtenon system overview, paper Fig. 2](figures/qtenon_overview.svg)
 """
 
 
 MD_SETUP_V3 = """
-## Setup: verify toolchain, compile the hybrid loop ELF
+## Setup: replay captures by default
 
-The rest of this notebook is driven by a single program,
-`software/tests/hybrid_loop_demo.c`, and by a Verilator build of
-`QChipRocketConfig`. The tutorial container ships the RISC-V
-toolchain (`riscv64-unknown-elf-gcc`), the Verilator binary, and
-the chipyard source tree, so the next cell does two things right
-here in the container:
+The notebook has two executable lanes:
 
-1. cross-compile the C program to a RISC-V ELF,
-2. make sure the Verilator simulator binary is up to date.
+| Lane | Source program | Default artifact | Purpose |
+| --- | --- | --- | --- |
+| Mechanism walkthrough | `software/tests/hybrid_loop_demo.c` | `tutorial/captures/hybrid_loop/` | show the ISA, datapaths, and `q_acquire` completion boundary on a small four-iteration loop |
+| Paper figure reproduction | `software/tests/paper_vqe_spsa.c` | `tutorial/captures/paper_vqe_spsa/` | rerun/replay the 64-qubit VQE/SPSA benchmark and reconstruct `time_breakdown` |
 
-If the image already has the binary, step 2 is a no-op and takes
-a few seconds. A full rebuild takes ~1 min on 8–16 cores.
+The default tutorial path is replay-only. The next cell loads the
+`hybrid_loop` capture for the mechanism sections; the later paper section
+loads the separate `paper_vqe_spsa` capture. This keeps the notebook runnable
+from the checked-in artifacts alone; the replay path does not require a local
+RISC-V toolchain, Chipyard checkout, or Verilator build.
 
-**The simulator is not invoked yet.** That lands at the bottom of
-the notebook, at the opening of §End-to-end consequence, where we
-actually run all four iterations of the hybrid loop and walk the
-retire timeline in one pass. The middle sections (programming
-model, R-type field layout, two on-chip datapaths) draw their
-evidence from the checked-in `captures/hybrid_loop/` archive: same
-bytes, same cycles, same custom0 words the live run will produce
-at the bottom. That ordering keeps the story on a crescendo. We
-first unpack what every single instruction means statically. Then,
-at the end, we run the loop live and see the 16 retires land in
-order.
+Contributors can opt into live simulation:
+
+| Environment flag | What reruns |
+| --- | --- |
+| `QTENON_RUN_LIVE_SIM=1` | `hybrid_loop_demo.c` in Cell [14] |
+| `QTENON_RUN_PAPER_EXPERIMENT=1` | `paper_vqe_spsa.c` in the paper-figure section |
+
+Both live paths use `QChipRocketConfig` and are intentionally opt-in because a
+full simulator build or run is machine-dependent and can take minutes.
 """
 
 
@@ -172,11 +168,11 @@ The captured trace below comes from one `q_set` moving program words into `.prog
 MD_END_TO_END = """
 ## End-to-end consequence
 
-Now we put the two paths to work inside an actual VQE-style iteration loop. The pattern is simple: iteration 0 sets up the program (bulk, path ②); iterations 1..K only update the variational parameter (register, path ①). Nothing about the program structure changes across iterations, so recompilation is unnecessary and the whole iteration becomes a single-cycle parameter swap plus a `q_gen` / `q_run` / `q_acquire` triple.
-
-For this short demo, the target parameter pair is \((\theta_0,\theta_1)=(38,55)\). The notebook reports `progress_to_target`: 0% at the initial parameter pair and 100% when the loop reaches that target. The point is not to reproduce a physical VQE energy; it is to make the feedback loop visible while keeping the ISA/data-path story concrete.
+Now we put the two paths to work inside an actual VQE-style iteration loop. The pattern is simple: iteration 0 sets up the program (bulk, path ②); iterations 1..K only update the variational parameter (register, path ①). Nothing about the program structure changes across iterations, so recompilation is unnecessary and the live trace should be read as a sequence/data-movement check: `q_set` appears once for setup, later iterations use `q_update`, and the same `q_gen` / `q_run` / `q_acquire` sequence consumes the prepared state.
 
 This is what the paper calls "dynamic incremental compilation" (§6.1). It is not an optimization added on top of the ISA. It is a direct consequence of having two separate datapaths and letting the ISA pick the one that matches the data shape.
+
+Important timing boundary: this tutorial backend now models `q_gen` as a 1000-cycle PGU countdown and `q_run` as shot-counted work, but those commands issue asynchronously from the host. The completion is therefore visible at the `q_acquire` → host-resume boundary, not in the retire gap from `q_gen` to `q_run`.
 
 The second half of Act 3 covers fine-grained synchronization (§6.3): because the quantum controller cache writes to host memory via TileLink PUTs post-hoc, the host can start post-processing measurements from shot *i* while the controller is still running shots *i+1*, *i+2*, …:
 
@@ -187,8 +183,10 @@ The second half of Act 3 covers fine-grained synchronization (§6.3): because th
 MD_SCOPE_CAVEAT = """
 A note on scope before we dive in:
 
-- **What the capture shows:** per-iteration `progress_to_target`, byte counts classified by datapath ① vs ②, plus a visual swimlane showing when the controller is busy with `q_run` and when the host CPU is free.
-- **What the capture does not show:** the full ASIC timing behavior under realistic FENCE contention, or the 441.5× / 14.9× speedup numbers from the paper. Those require the 64-qubit workload and the ASIC host model (paper §7). Here we are showing that the ISA *permits* overlap and incremental updates; the magnitude numbers live in the slides.
+- **What the capture shows:** instruction issue order, per-iteration byte counts classified by datapath ① vs ②, and the `q_acquire` → host-resume waits where queued `q_gen`/`q_run` completion becomes visible.
+- **What the Docker tutorial backend models:** `q_gen` snapshots the current tutorial parameters after a 1000-cycle PGU countdown; `q_run` computes a deterministic measurement word after shot-counted work. This makes the end-to-end loop visible and repeatable in a small simulator.
+- **What the paper timing model adds:** full 64-qubit physical timing, ASIC host contention, and speedup modeling. The miniature backend only anchors the key latency dependency; it is not the paper's complete §7 performance model.
+- **What the capture does not show:** full ASIC timing under realistic FENCE contention, or the 441.5× / 14.9× speedup numbers from the paper. Those require the 64-qubit workload and the ASIC host model (paper §7). Here we are showing that the ISA *permits* overlap and incremental updates; the magnitude numbers live in the slides/paper.
 """
 
 
@@ -198,17 +196,36 @@ MD_CONCLUSION = """
 This notebook showed:
 
 1. **Programming model**: a hybrid quantum-classical loop written as one C program using five ISA extensions (Act 1).
-2. **Hardware fabric**: two on-chip datapaths (RoCC single-cycle register path, TileLink bulk L2↔QCC path) replacing the decoupled USB/Ethernet link (Act 2).
-3. **Runtime consequence**: iterations 1..K use the single-cycle path for parameter-only updates, and the memory consistency protocol permits the host to interleave post-processing with quantum execution (Act 3).
+2. **Hardware fabric**: two on-chip datapaths (RoCC register path, TileLink bulk L2↔QCC path) replacing the decoupled USB/Ethernet link (Act 2).
+3. **Runtime consequence**: iterations 1..K use the register path for parameter-only updates, and the memory consistency protocol permits the host to interleave post-processing with quantum execution (Act 3).
+4. **Paper-figure reproduction path**: `paper_vqe_spsa.c` emits raw benchmark metrics, and the notebook applies the paper's Section 7 timing assumptions to redraw the 64-qubit VQE/SPSA `time_breakdown` figure.
 
 This notebook did **not** reproduce:
 
 - the 441.5× classical-processing or 14.9× end-to-end speedup numbers, which require the full 64-qubit VQE workload and the ASIC host model (paper §7);
+- the full physical `q_run` quantum-execution timing and end-to-end speedup model from paper §7;
 - the SLT skip-lookup behavior (datapath ③, controller-internal);
 - the pulse output to physical DACs (datapath ④, no real quantum chip in this simulator);
 - the full instruction scheduler's batched transmission policy (paper §6.2).
 
 For any of those, read paper §5–§7 directly. The corresponding figures are under `paper_list/ISCA2025_Qtenon/pic/experiment/`.
+"""
+
+
+MD_PAPER_TIME_BREAKDOWN = """
+## Paper figure reproduction: 64-qubit VQE/SPSA time breakdown
+
+The target paper figure is `pic/experiment/time_breakdown.pdf`. Its caption is the end-to-end breakdown of **64-qubit VQE optimized by SPSA**, so this section uses `software/tests/paper_vqe_spsa.c`, not QAOA.
+
+The figure has three panels:
+
+| Panel | Meaning |
+| --- | --- |
+| (a) Baseline | Decoupled host + FPGA controller |
+| (b) Qtenon w/o software | Qtenon hardware without the software optimizations |
+| (c) Qtenon | Qtenon with the fine-grained synchronization / scheduling path |
+
+This is still an evaluation-model figure. The benchmark run provides raw `rdcycle` / instruction-count metrics; the notebook then uses the benchmark's own `rdcycle` replay windows for the paper host-computation terms and applies the paper's evaluation assumptions for quantum execution, communication, and pulse generation. The `source` column below marks that boundary.
 """
 
 
@@ -250,17 +267,27 @@ from tutorial.helpers.encode import (
 )
 from tutorial.helpers.notebook_support import (
     CaptureMissing,
+    COMPONENT_LABELS,
+    DEFAULT_TIMING_ASSUMPTIONS,
+    PAPER_VQE_CAPTURE,
+    SCENARIO_LABELS,
+    SCENARIO_ORDER,
     compile_elf,
     ensure_simulator,
     find_objdump_line,
     format_table,
     load_capture_static,
+    paper_breakdown_plot_rows,
+    paper_breakdown_table_rows,
     parse_hybrid_output,
     run_local_sim,
+    run_paper_vqe_spsa,
     source_block,
 )
 from tutorial.helpers.trace import (
     classify_path,
+    last_trace_cycle,
+    parse_acquire_completion_waits,
     parse_trace_text,
     split_hybrid_iterations,
 )
@@ -270,7 +297,6 @@ paths = TutorialPaths.discover(Path.cwd())
 
 
 CODE_CELL_3_PREPARE = '''
-import os
 import shutil
 import time
 from dataclasses import dataclass
@@ -280,96 +306,47 @@ from pathlib import Path
 @dataclass
 class PreparedRun:
     capture: object
-    elf_path: Path
-    simulator_path: Path
     run_dir: Path
     chipyard_root: Path
     config_name: str
-    uses_baked_cache: bool
+    elf_path: Path | None = None
+    simulator_path: Path | None = None
 
 
 run_dir = paths.tutorial_dir / "runs" / "hybrid_loop"
-cache_files = [
-    run_dir / "hybrid_loop.elf",
-    run_dir / "hybrid_loop.log",
-    run_dir / "hybrid_loop.objdump.txt",
-    run_dir / "hybrid_loop.trace.txt",
-]
-use_baked_cache = (
-    os.environ.get("QTENON_IGNORE_BAKED_CACHE") != "1"
-    and all(path.is_file() for path in cache_files)
-)
-
-if use_baked_cache:
-    elf_path = run_dir / "hybrid_loop.elf"
-    elf_bytes = elf_path.stat().st_size
-    compile_wall = 0.0
-    simulator_path = Path(os.environ.get("QTENON_SIMULATOR", "/usr/local/bin/qtenon-sim"))
-    sim_wall = 0.0
-    sim_status = "(baked cache; simulator build skipped)"
-else:
-    if run_dir.exists():
-        shutil.rmtree(run_dir)
-    run_dir.mkdir(parents=True, exist_ok=True)
-
-    t0 = time.perf_counter()
-    elf_result = compile_elf(
-        paths.tests_dir / "hybrid_loop_demo.c",
-        run_dir / "hybrid_loop.elf",
-    )
-    compile_wall = time.perf_counter() - t0
-    elf_path = Path(elf_result.elf_path)
-    elf_bytes = elf_path.stat().st_size
-
-    # Dump the fresh objdump so runs/ is self-contained.
-    objdump_target = run_dir / "hybrid_loop.objdump.txt"
-    if hasattr(elf_result, "objdump_text") and elf_result.objdump_text is not None:
-        objdump_target.write_text(elf_result.objdump_text, encoding="utf-8")
-
-    t1 = time.perf_counter()
-    simulator_path = ensure_simulator(paths.chipyard_root, paths.config_name)
-    sim_wall = time.perf_counter() - t1
-    sim_status = "(no-op: binary already built)"
+if run_dir.exists():
+    shutil.rmtree(run_dir)
+run_dir.mkdir(parents=True, exist_ok=True)
 
 capture = load_capture_static(paths.captures_dir, "hybrid_loop")
 
 prepared = PreparedRun(
     capture=capture,
-    elf_path=elf_path,
-    simulator_path=simulator_path,
     run_dir=run_dir,
     chipyard_root=paths.chipyard_root,
     config_name=paths.config_name,
-    uses_baked_cache=use_baked_cache,
 )
 
 capture_trace_bytes = len(capture.trace_text.encode("utf-8"))
+capture_cycles = last_trace_cycle(capture.trace_text) or 0
+capture_custom0 = len(parse_trace_text(capture.trace_text))
 
-if use_baked_cache:
-    print(
-        f"Using baked Qtenon run cache…      {compile_wall:4.1f} s  "
-        f"→  {prepared.elf_path.relative_to(paths.repo_root)} ({elf_bytes} B)"
-    )
-else:
-    print(
-        f"Cross-compiling hybrid_loop_demo.c…  {compile_wall:4.1f} s  "
-        f"→  {prepared.elf_path.relative_to(paths.repo_root)} ({elf_bytes} B)"
-    )
-print(
-    f"Ensuring Verilator simulator…        {sim_wall:4.1f} s  {sim_status}"
-)
+print("Loaded checked-in hybrid_loop capture; no simulator run in setup.")
 print()
 print(
-    "Toolchain ready. Simulation evidence lands at §End-to-end consequence; "
-    "middle sections read captures/hybrid_loop/."
+    "Set QTENON_RUN_LIVE_SIM=1 before executing the notebook to rebuild/run "
+    "the local simulator at Cell [14]."
 )
+print("The paper_vqe_spsa capture is loaded later by the paper-figure section.")
 print()
 print(
     format_table(
-        ["elf path", "simulator binary", "capture trace bytes"],
+        ["capture trace", "log", "custom0 insts", "last trace cyc", "trace bytes"],
         [[
-            str(prepared.elf_path.relative_to(paths.repo_root)),
-            str(prepared.simulator_path),
+            str(capture.trace_path.relative_to(paths.repo_root)),
+            str(capture.log_path.relative_to(paths.repo_root)),
+            capture_custom0,
+            capture_cycles,
             capture_trace_bytes,
         ]],
     )
@@ -563,80 +540,60 @@ parsed = [
 ]
 assert len(parsed) == 16, f"expected 16 custom0 retire events, got {len(parsed)}"
 
-iters = split_hybrid_iterations(parsed)
-
 first_set = next(e for e in parsed if e.command == "q_set")
 first_update = next(e for e in parsed if e.command == "q_update")
 
-
-def _successor_in_same_iter(entry):
-    for group in iters:
-        if entry in group:
-            idx = group.index(entry)
-            if idx + 1 < len(group):
-                return group[idx + 1], group
-            return None, group
-    return None, None
-
-
-def _iter_index(group):
-    return iters.index(group)
-
-
-set_next, set_group = _successor_in_same_iter(first_set)
-update_next, update_group = _successor_in_same_iter(first_update)
-assert set_next is not None and update_next is not None, (
-    "Expected q_set/q_update to have an immediate successor in the same iteration"
-)
-
-gap_set = set_next.cycle - first_set.cycle
-gap_update = update_next.cycle - first_update.cycle
-
 rows = []
-for entry, successor_gap, group in (
-    (first_set, gap_set, set_group),
-    (first_update, gap_update, update_group),
+for entry, role, payload_shape in (
+    (
+        first_set,
+        "one-time setup",
+        "program words via host memory + QAddress",
+    ),
+    (
+        first_update,
+        "per-iteration parameter update",
+        "one 64-bit scalar carried in rs1",
+    ),
 ):
     label = classify_path(entry.command)
     assert label in {"①", "②"}, f"classify_path({entry.command}) -> {label}"
     rows.append([
         label,
         entry.command,
-        f"iter {_iter_index(group)}",
+        role,
+        payload_shape,
         f"0x{entry.pc:016x}",
         f"0x{entry.instruction:08x}",
         entry.cycle,
-        f"+{successor_gap}",
     ])
 
 print(
     format_table(
-        ["path", "command", "from", "pc", "word", "retire cyc", "Δ to next"],
+        ["path", "command", "role", "payload shape", "pc", "word", "retire cyc"],
         rows,
     )
 )
 print()
 print(
-    f"path ① q_update → next = {gap_update} cyc   "
-    f"(pure RoCC register write)"
+    "Read this table as an ISA/datapath check, not as a latency measurement."
 )
 print(
-    f"path ② q_set    → next = {gap_set} cyc   "
-    f"(RoCC + TileLink burst handshake; full timeline at Cell [14])"
+    "The retire cycle identifies where the instruction appears in the trace; "
+    "paper-level q_gen/q_run timing is not inferred from these gaps."
 )
 '''
 
 
 CODE_CELL_14_LIVE_SIM = '''
-import os
 import shutil
 import time
 from dataclasses import dataclass
-from types import SimpleNamespace
 
 
 @dataclass
 class LiveRun:
+    source: str
     trace_text: str
     log_text: str
     objdump_text: str
@@ -644,38 +601,22 @@ class LiveRun:
 
 
 run_dir = prepared.run_dir
-use_baked_cache = (
-    getattr(prepared, "uses_baked_cache", False)
-    and os.environ.get("QTENON_IGNORE_BAKED_CACHE") != "1"
-)
+run_live = os.environ.get("QTENON_RUN_LIVE_SIM") == "1"
 
-t0 = time.perf_counter()
-if use_baked_cache:
-    trace_text = (run_dir / "hybrid_loop.trace.txt").read_text(encoding="utf-8")
-    log_text = (run_dir / "hybrid_loop.log").read_text(encoding="utf-8")
-    objdump_path = run_dir / "hybrid_loop.objdump.txt"
-    if not objdump_path.exists():
-        shutil.copyfile(
-            prepared.capture.objdump_path,
-            objdump_path,
-        )
-    objdump_text = objdump_path.read_text(encoding="utf-8")
-    parsed_for_counts = [
-        entry
-        for entry in parse_trace_text(trace_text)
-        if entry.command is not None
-    ]
-    cycle_count = 0
-    for entry in reversed(parsed_for_counts):
-        if entry.cycle is not None:
-            cycle_count = entry.cycle
-            break
-    result = SimpleNamespace(
-        cycle_count=cycle_count,
-        custom0_count=len(parsed_for_counts),
-        iteration_count=4,
+if run_live:
+    t_compile = time.perf_counter()
+    elf_result = compile_elf(
+        paths.tests_dir / "hybrid_loop_demo.c",
+        run_dir / "hybrid_loop.elf",
     )
-else:
+    prepared.elf_path = Path(elf_result.elf_path)
+    compile_wall = time.perf_counter() - t_compile
+
+    t_sim_build = time.perf_counter()
+    prepared.simulator_path = ensure_simulator(paths.chipyard_root, paths.config_name)
+    sim_build_wall = time.perf_counter() - t_sim_build
+
+    t0 = time.perf_counter()
     result = run_local_sim(
         prepared.simulator_path,
         prepared.elf_path,
@@ -683,6 +624,8 @@ else:
         chipyard_root=prepared.chipyard_root,
         config_name=prepared.config_name,
     )
+    wall = time.perf_counter() - t0
+
     trace_text = (run_dir / "hybrid_loop.trace.txt").read_text(encoding="utf-8")
     log_text = (run_dir / "hybrid_loop.log").read_text(encoding="utf-8")
     objdump_path = run_dir / "hybrid_loop.objdump.txt"
@@ -692,34 +635,55 @@ else:
             objdump_path,
         )
     objdump_text = objdump_path.read_text(encoding="utf-8")
-wall = time.perf_counter() - t0
-
+    source_label = "live simulator"
+    cycles = getattr(result, "cycle_count", None)
+    custom0 = getattr(result, "custom0_count", None)
+    print(
+        f"Running live simulation…  compile {compile_wall:4.1f} s, "
+        f"ensure sim {sim_build_wall:4.1f} s, run {wall:4.1f} s  "
+        f"({cycles} cycles, {custom0} custom0 insts)"
+    )
+else:
+    trace_text = prepared.capture.trace_text
+    log_text = prepared.capture.log_text
+    objdump_text = prepared.capture.objdump_text
+    source_label = "checked-in hybrid_loop capture replay"
+    cycles = last_trace_cycle(trace_text)
+    custom0 = len(parse_trace_text(trace_text))
+    print(
+        f"Replaying checked-in capture…  "
+        f"({cycles} cycles, {custom0} custom0 insts)"
+    )
 
 run = LiveRun(
+    source=source_label,
     trace_text=trace_text,
     log_text=log_text,
     objdump_text=objdump_text,
     run_dir=run_dir,
 )
-cycles = getattr(result, "cycle_count", None)
-custom0 = getattr(result, "custom0_count", None)
-iters_n = getattr(result, "iteration_count", 4)
-run_label = "Using baked simulation cache" if use_baked_cache else "Running simulation"
-print(
-    f"{run_label}…  {wall:4.1f} s  "
-    f"({cycles} cycles, {custom0} custom0 insts, {iters_n} iterations)"
-)
 
 print()
-print("UART output (read from hybrid_loop.log):")
-for line in run.log_text.splitlines():
-    stripped = line.rstrip()
-    if not stripped:
-        continue
-    if stripped.startswith("iter,") or (
-        "," in stripped and stripped.split(",", 1)[0].isdigit()
-    ):
-        print(f"  {stripped}")
+print(f"Trace source: {run.source}")
+print()
+uart_iters = parse_hybrid_output(run.log_text)
+assert len(uart_iters) == 4, f"expected 4 UART iteration rows, got {len(uart_iters)}"
+print("UART iteration state (read from hybrid_loop.log):")
+print(
+    format_table(
+        ["iter", "theta0_idx", "theta1_idx", "sample_bits", "acquire_word"],
+        [
+            [
+                row.iteration,
+                row.theta0_idx,
+                row.theta1_idx,
+                row.sample_bits,
+                row.acquire_word_hex,
+            ]
+            for row in uart_iters
+        ],
+    )
+)
 print()
 
 parsed = [
@@ -733,13 +697,8 @@ assert len(iters) == 4, f"expected 4 iterations, got {len(iters)}"
 
 rows = []
 for iter_index, group in enumerate(iters):
-    prev = None
     for entry in group:
         label = classify_path(entry.command)
-        if prev is None:
-            gap_str = "—"
-        else:
-            gap_str = f"+{entry.cycle - prev.cycle}"
         rows.append([
             iter_index,
             label,
@@ -747,180 +706,305 @@ for iter_index, group in enumerate(iters):
             f"0x{entry.pc:016x}",
             f"0x{entry.instruction:08x}",
             entry.cycle,
-            gap_str,
         ])
-        prev = entry
 
 print(
     format_table(
-        ["iter", "path", "command", "pc", "word", "retire cyc", "Δ prev cyc"],
+        ["iter", "path", "command", "pc", "word", "retire cyc"],
         rows,
     )
 )
-
-import statistics
-
-
-def _same_iter_successor_gaps(command):
-    gaps = []
-    for group in iters:
-        for idx, entry in enumerate(group):
-            if entry.command == command and idx + 1 < len(group):
-                gaps.append(group[idx + 1].cycle - entry.cycle)
-    return gaps
-
-
-update_gaps = _same_iter_successor_gaps("q_update")
-set_gaps = _same_iter_successor_gaps("q_set")
-assert update_gaps, "expected at least one q_update → next gap"
-assert set_gaps, "expected at least one q_set → next gap"
-
-m_update = int(statistics.median(update_gaps))
-n_set = set_gaps[0]
-
 print()
-print(
-    f"q_update → next (iter 1..3, median) = {m_update} cyc   "
-    f"(path ①; includes fetch bubble)"
-)
-print(
-    f"q_set    → next (iter 0)            = {n_set} cyc   "
-    f"(path ②; includes fetch bubble + TileLink handshake)"
-)
-print(
-    f"Δ = {n_set - m_update} cyc reflects path ②'s TileLink handshake; "
-    "numbers are retire-to-retire"
-)
-print(
-    "gaps, not absolute transfer latency (see paper §5.2 for ASIC-scale "
-    "numbers)."
-)
-'''
 
-
-CODE_CELL_15_PROGRESS_PLOT = '''
-import matplotlib.pyplot as plt
-
-iters_data = parse_hybrid_output(run.log_text)
-assert len(iters_data) == 4, f"expected 4 iteration rows, got {len(iters_data)}"
-
-TARGET_THETA0 = 38
-TARGET_THETA1 = 55
-
-
-def distance_to_target(row):
-    return (row.theta0_idx - TARGET_THETA0) ** 2 + (row.theta1_idx - TARGET_THETA1) ** 2
-
-
-initial_distance = distance_to_target(iters_data[0])
-assert initial_distance > 0, "initial parameters already match the target"
-
-xs = [r.iteration for r in iters_data]
-progress_percent = [
-    100.0 * (1.0 - distance_to_target(r) / initial_distance)
-    for r in iters_data
-]
-
-fig, ax = plt.subplots(figsize=(5.5, 3.0))
-ax.plot(xs, progress_percent, marker="o", linewidth=1.5)
-for r, y in zip(iters_data, progress_percent):
-    ax.annotate(
-        f"sb={r.sample_bits}",
-        xy=(r.iteration, y),
-        xytext=(0, 8),
-        textcoords="offset points",
-        ha="center",
-        fontsize=8,
-    )
-
-ax.set_xlabel("iteration")
-ax.set_ylabel("progress_to_target (%)")
-ax.set_xticks(xs)
-ax.set_ylim(-5, 105)
-ax.grid(True, alpha=0.3)
-ax.set_title("Progress toward target θ=(38,55)")
-plt.tight_layout()
-plt.show()
-
-table_rows = [
-    [
-        r.iteration,
-        r.theta0_idx,
-        r.theta1_idx,
-        r.sample_bits,
-        f"{progress:.1f}%",
-    ]
-    for r, progress in zip(iters_data, progress_percent)
-]
-
-print(
-    format_table(
-        ["iter", "θ₀", "θ₁", "sample_bits", "progress_to_target"],
-        table_rows,
-    )
-)
-'''
-
-
-CODE_CELL_16_COMPARISON = '''
-iters_data = parse_hybrid_output(run.log_text)
-assert len(iters_data) == 4, f"expected 4 iteration rows, got {len(iters_data)}"
-
-# from software/tests/hybrid_loop_demo.c
-SETUP_WORDS   = 128   # BULK_SETUP_WORDS  — length_words fed to pack_qaddress
-UPDATE_BYTES  = 8     # one uint64_t dropped via q_update (path ①)
-ACQUIRE_BYTES = 8     # one uint64_t pulled back via q_acquire (path ②)
-SETUP_BYTES   = SETUP_WORDS * 2  # `short` elements in setup_words[]
-
-rows = []
-for r in iters_data:
-    if r.iteration == 0:
-        sequence = "q_set + q_gen + q_run + q_acquire"
-        bytes_ii = SETUP_BYTES + ACQUIRE_BYTES
-        bytes_i = 0
-    else:
-        sequence = "q_update + q_gen + q_run + q_acquire"
-        bytes_ii = ACQUIRE_BYTES
-        bytes_i = UPDATE_BYTES
-    rows.append([
-        r.iteration,
-        sequence,
-        bytes_ii,
-        bytes_i,
-        "no",
+waits = parse_acquire_completion_waits(run.trace_text)
+assert len(waits) == 4, f"expected 4 q_acquire completion waits, got {len(waits)}"
+wait_rows = []
+for wait in waits:
+    wait_rows.append([
+        wait.iteration,
+        wait.q_gen_cycle,
+        wait.q_run_cycle,
+        wait.acquire_cycle,
+        wait.resume_cycle,
+        wait.acquire_to_resume_cycles,
+        wait.gen_to_resume_cycles,
     ])
 
 print(
     format_table(
         [
             "iter",
-            "sequence",
-            "bytes ②",
-            "bytes ①",
-            "recompile",
+            "q_gen issue",
+            "q_run issue",
+            "q_acquire issue",
+            "host resumes",
+            "acquire→resume",
+            "q_gen→resume",
         ],
-        rows,
+        wait_rows,
     )
 )
 print()
 print(
-    f"iter 0   path ② bytes = {SETUP_BYTES + ACQUIRE_BYTES} B   "
-    f"(one-time setup: {SETUP_BYTES} B program + {ACQUIRE_BYTES} B acquire)"
+    "The first table is the custom0 issue trace. The second table is the "
+    "completion-visible boundary: q_acquire issues, then the host does not "
+    "retire another instruction until the queued PGU countdown plus shot-counted "
+    "run has produced a measurement."
 )
+print()
 print(
-    f"iter 1..3 path ① bytes = {UPDATE_BYTES} B each  "
-    f"(incremental update) + {ACQUIRE_BYTES} B path ② acquire"
+    "So q_run→q_acquire retire gaps are not q_run latency. The useful demo "
+    "number is q_acquire→host-resume; q_gen→host-resume includes the 1000-cycle "
+    "PGU anchor, the 128-shot run, and ordinary host/control overhead."
 )
+'''
+
+
+CODE_CELL_PAPER_BREAKDOWN = '''
+import math
+import matplotlib.pyplot as plt
+
+paper_run_dir = paths.tutorial_dir / "runs" / PAPER_VQE_CAPTURE
+if paper_run_dir.exists():
+    shutil.rmtree(paper_run_dir)
+paper_run_dir.mkdir(parents=True, exist_ok=True)
+
+paper_live = os.environ.get("QTENON_RUN_PAPER_EXPERIMENT") == "1"
+paper_artifacts = run_paper_vqe_spsa(paths, paper_run_dir, live=paper_live)
+paper_log = paper_artifacts.parsed
+assert paper_log is not None
+
+print(f"Paper experiment source: {paper_artifacts.source}")
 print(
-    "Once the program is in QCC, every subsequent iteration is an 8-byte "
-    "register write."
+    "Set QTENON_RUN_PAPER_EXPERIMENT=1 before executing the notebook to "
+    "re-run paper_vqe_spsa through Verilator."
 )
+print()
+print("Step 1: raw simulator evidence")
+print()
 print(
-    "No recompile, no bulk DMA. That is the end-to-end consequence of"
+    format_table(
+        ["metric", "value"],
+        [
+            ["qubits", paper_log.metric("qubits")],
+            ["shots", paper_log.metric("shots")],
+            ["iterations", paper_log.metric("iterations")],
+            ["parameters", paper_log.metric("parameters")],
+            ["q_set_calls", paper_log.metric("q_set_calls")],
+            ["q_update_calls", paper_log.metric("q_update_calls")],
+            ["q_gen_calls", paper_log.metric("q_gen_calls")],
+            ["q_run_calls", paper_log.metric("q_run_calls")],
+            ["total_cycles", paper_log.metric("total_cycles")],
+            ["qtenon_host_cycles_rdcycle", paper_log.metric("qtenon_host_cycles_rdcycle")],
+            ["qtenon_without_software_host_cycles_rdcycle", paper_log.metric("qtenon_without_software_host_cycles_rdcycle")],
+        ],
+    )
 )
+print()
+print("Step 2: paper timing model applied to that benchmark context")
+print("Timing conversion: target core = 1 GHz, so 1 rdcycle tick = 1 ns.")
+print()
+
+assumptions = DEFAULT_TIMING_ASSUMPTIONS
+raw_total_ms = paper_log.metric("total_cycles") * assumptions.target_cycle_ns / 1_000_000.0
+wo_host_ms = paper_log.metric("qtenon_without_software_host_cycles_rdcycle") * assumptions.target_cycle_ns / 1_000_000.0
+full_host_ms = paper_log.metric("qtenon_host_cycles_rdcycle") * assumptions.target_cycle_ns / 1_000_000.0
+wo_comm_ms = assumptions.qtenon_without_software_comm_ns / 1_000_000.0
+full_comm_ms = assumptions.qtenon_comm_ns / 1_000_000.0
+pulse_ms = assumptions.qtenon_pulse_generation_ns / 1_000_000.0
+quantum_ms = assumptions.quantum_execution_ns / 1_000_000.0
+wo_total_ms = quantum_ms + wo_comm_ms + pulse_ms + wo_host_ms
+full_total_ms = quantum_ms + full_comm_ms + pulse_ms + full_host_ms
+
 print(
-    "splitting host↔QCC traffic into two paths behind one ISA."
+    format_table(
+        ["item", "expression", "ms", "source"],
+        [
+            [
+                "Verilator raw run",
+                f"{paper_log.metric('total_cycles'):,} cycles @ 1 ns",
+                f"{raw_total_ms:.6f}",
+                "current simulator evidence, not the paper figure total",
+            ],
+            [
+                "Qtenon w/o software host",
+                f"{paper_log.metric('qtenon_without_software_host_cycles_rdcycle'):,} cycles @ 1 ns",
+                f"{wo_host_ms:.6f}",
+                "verilator rdcycle replay",
+            ],
+            [
+                "Qtenon total host",
+                f"{paper_log.metric('qtenon_host_cycles_rdcycle'):,} cycles @ 1 ns",
+                f"{full_host_ms:.6f}",
+                "verilator rdcycle replay",
+            ],
+            [
+                "Qtenon w/o software total",
+                (
+                    f"{quantum_ms:.6f} + {wo_comm_ms:.6f} + "
+                    f"{pulse_ms:.6f} + {wo_host_ms:.6f}"
+                ),
+                f"{wo_total_ms:.6f}",
+                "paper model + verilator rdcycle",
+            ],
+            [
+                "Qtenon total",
+                (
+                    f"{quantum_ms:.6f} + {full_comm_ms:.6f} + "
+                    f"{pulse_ms:.6f} + {full_host_ms:.6f}"
+                ),
+                f"{full_total_ms:.6f}",
+                "paper model + verilator rdcycle",
+            ],
+        ],
+    )
 )
+print()
+
+print("Step 3: rows used to redraw time_breakdown")
+print()
+table_rows = []
+for scenario, component, total_ms, component_ms, percent, source in paper_breakdown_table_rows(paper_log):
+    table_rows.append([
+        scenario,
+        component,
+        f"{total_ms:.1f}",
+        f"{component_ms:.4f}",
+        f"{percent:g}%",
+        source,
+    ])
+
+print(
+    format_table(
+        ["scenario", "component", "total ms", "component ms", "percent", "source"],
+        table_rows,
+    )
+)
+
+component_colors = {
+    "quantum_execution": "#caa98f",
+    "quantum_host_comm": "#af927a",
+    "pulse_generation": "#f6d097",
+    "host_computation": "#e7d2b6",
+}
+
+plot_rows = paper_breakdown_plot_rows(paper_log)
+paper_component_order = [
+    "quantum_execution",
+    "pulse_generation",
+    "host_computation",
+    "quantum_host_comm",
+]
+panel_labels = {
+    "baseline": "(a) Baseline",
+    "qtenon_without_software": "(b) Qtenon w/o software",
+    "qtenon": "(c) Qtenon",
+}
+panel_start_angles = {
+    "baseline": 93,
+    "qtenon_without_software": 347,
+    "qtenon": 323,
+}
+
+
+def percent_label(percent):
+    if percent < 0.1:
+        return f"{percent:.2f}%"
+    return f"{percent:.1f}".rstrip("0").rstrip(".") + "%"
+
+
+def label_inside(scenario, component, percent):
+    if component == "host_computation" and percent >= 7:
+        return True
+    if component == "quantum_host_comm" and scenario == "baseline":
+        return True
+    return percent >= 10
+
+
+def label_radius(scenario, component, inside):
+    if not inside:
+        return 1.18
+    if scenario == "qtenon" and component == "host_computation":
+        return 0.72
+    return 0.50
+
+
+with plt.rc_context({
+    "font.family": "serif",
+    "font.size": 16,
+    "figure.facecolor": "white",
+    "axes.facecolor": "white",
+}):
+    fig, axes = plt.subplots(1, 3, figsize=(12.5, 5.7))
+    fig.subplots_adjust(top=0.70, bottom=0.16, left=0.035, right=0.985, wspace=0.18)
+
+    legend_order = ["quantum_execution", "quantum_host_comm", "pulse_generation", "host_computation"]
+    legend_handles = [
+        plt.Rectangle((0, 0), 1, 1, facecolor=component_colors[key], edgecolor="black", linewidth=1.4)
+        for key in legend_order
+    ]
+    legend_labels = [
+        "Quantum execution",
+        "Quantum-host comm.",
+        "Pulse generation",
+        "Host computation",
+    ]
+    fig.legend(
+        legend_handles,
+        legend_labels,
+        loc="upper center",
+        ncol=2,
+        frameon=False,
+        bbox_to_anchor=(0.53, 0.99),
+        columnspacing=1.8,
+        handletextpad=0.55,
+        fontsize=18,
+    )
+
+    for ax, scenario in zip(axes, SCENARIO_ORDER):
+        rows_by_component = {row.component: row for row in plot_rows[scenario]}
+        rows = [rows_by_component[key] for key in paper_component_order]
+        sizes = [row.component_percent for row in rows]
+        colors = [component_colors[row.component] for row in rows]
+        explode = [0.055, 0.055, 0.055, 0.055]
+        wedges, _ = ax.pie(
+            sizes,
+            colors=colors,
+            explode=explode,
+            startangle=panel_start_angles[scenario],
+            counterclock=False,
+            wedgeprops={"linewidth": 1.35, "edgecolor": "black"},
+            radius=1.0,
+        )
+
+        for wedge, row in zip(wedges, rows):
+            angle = (wedge.theta1 + wedge.theta2) / 2.0
+            radians = angle * 3.141592653589793 / 180.0
+            inside = label_inside(scenario, row.component, row.component_percent)
+            radius = label_radius(scenario, row.component, inside)
+            x = radius * math.cos(radians)
+            y = radius * math.sin(radians)
+            ha = "center" if inside else ("left" if x >= 0 else "right")
+            color = "white" if row.component == "quantum_host_comm" and scenario == "baseline" else "black"
+            ax.text(
+                x,
+                y,
+                percent_label(row.component_percent),
+                ha=ha,
+                va="center",
+                fontsize=18 if inside else 17,
+                color=color,
+            )
+
+        total_ms = rows[0].total_ms
+        ax.text(0, -1.33, f"{total_ms:.1f} ms", ha="center", va="center", fontsize=19, fontweight="bold")
+        ax.text(0, -1.70, panel_labels[scenario], ha="center", va="center", fontsize=20)
+        ax.set_xlim(-1.35, 1.35)
+        ax.set_ylim(-1.85, 1.27)
+        ax.axis("off")
+        ax.set_aspect("equal")
+
+    plt.show()
 '''
 
 
@@ -957,12 +1041,12 @@ def build_notebook() -> dict[str, object]:
         markdown_cell(MD_END_TO_END, cell_id="8eb5cd77"),
         # Cell [13] md — End-to-end scope caveat (frozen)
         markdown_cell(MD_SCOPE_CAVEAT, cell_id="ff39d455"),
-        # Cell [14] code — end-to-end simulation evidence
+        # Cell [14] code — end-to-end live simulation climax
         code_cell(CODE_CELL_14_LIVE_SIM, cell_id="c14-live-sim"),
-        # Cell [15] code — per-iteration progress line plot
-        code_cell(CODE_CELL_15_PROGRESS_PLOT, cell_id="c15-objective-plot"),
-        # Cell [16] code — end-to-end comparison table
-        code_cell(CODE_CELL_16_COMPARISON, cell_id="c16-comparison-table"),
+        # Cell [15] md — Paper figure reproduction scope
+        markdown_cell(MD_PAPER_TIME_BREAKDOWN, cell_id="paper-breakdown-md"),
+        # Cell [16] code — VQE/SPSA time_breakdown reproduction
+        code_cell(CODE_CELL_PAPER_BREAKDOWN, cell_id="paper-breakdown-code"),
         # Cell [17] md — What this notebook did and did not do (heading rename)
         markdown_cell(MD_CONCLUSION, cell_id="6e241095"),
     ]
@@ -971,9 +1055,9 @@ def build_notebook() -> dict[str, object]:
         "cells": cells,
         "metadata": {
             "kernelspec": {
-                "display_name": "Qtenon",
+                "display_name": "Python 3",
                 "language": "python",
-                "name": "qtenon",
+                "name": "python3",
             },
             "language_info": {
                 "name": "python",

@@ -107,16 +107,16 @@ def find_objdump_line(objdump_text: str, pc: int, word: int) -> ObjdumpLine:
 
     objdump renders these lines as e.g.
     ``    80000378:\\t00f6300b          \\t.4byte\\t0xf6300b    # q_set`` —
-    the leading pc column drops leading zeros and the ``.4byte`` argument is
-    the ``word`` value without leading zeros. The match is case-insensitive
-    and tolerant of trailing ``# <command>`` comments and surrounding
-    whitespace.
+    the leading pc column drops leading zeros and the immediate argument may
+    be ``.4byte`` or ``.word`` with or without leading zeros. The match is
+    case-insensitive and tolerant of trailing ``# <command>`` comments and
+    surrounding whitespace.
 
     Raises :class:`ValueError` if no matching line is found.
     """
 
     pattern = re.compile(
-        rf"(?:^|\s)0*{pc:x}:\s+[0-9a-fA-F]+\s+\.4byte\s+0x{word:x}\b",
+        rf"(?:^|\s)0*{pc:x}:\s+[0-9a-fA-F]+\s+\.(?:4byte|word)\s+0x0*{word:x}\b",
         re.IGNORECASE,
     )
     for raw_line in objdump_text.splitlines():

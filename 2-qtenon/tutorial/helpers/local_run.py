@@ -20,7 +20,7 @@ import subprocess
 import time
 from typing import Literal
 
-from .trace import filter_trace, parse_trace_text
+from .trace import filter_trace, last_trace_cycle, parse_trace_text
 
 
 class ToolchainMissing(RuntimeError):
@@ -247,10 +247,22 @@ def _direct_mode_available(chipyard_root: Path) -> bool:
     return False
 
 
-def _run_direct(simulator: Path, elf: Path, out_dir: Path) -> tuple[str, str, float]:
+def _run_direct(
+    simulator: Path,
+    elf: Path,
+    out_dir: Path,
+    *,
+    verbose: bool = True,
+    sim_flags: list[str] | None = None,
+) -> tuple[str, str, float]:
     """Invoke simulator directly. Returns (raw_trace_stderr, log_stdout, wall_seconds)."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    argv = [str(simulator), "+permissive", "+verbose", "+permissive-off", str(elf.resolve())]
+    argv = [str(simulator), "+permissive"]
+    if sim_flags:
+        argv.extend(sim_flags)
+    if verbose:
+        argv.append("+verbose")
+    argv.extend(["+permissive-off", str(elf.resolve())])
     start = time.monotonic()
     try:
         completed = subprocess.run(
@@ -277,26 +289,31 @@ def run_local_sim(
     *,
     chipyard_root: Path,
     config_name: str,
+    fast: bool = False,
+    sim_flags: list[str] | None = None,
 ) -> "LocalRunResult":
     """Run the chipyard verilator simulator on ``elf``.
 
     Two execution modes are supported:
 
     * **Make mode** (default validation environment contributor flow): delegates to
-      chipyard's ``sims/verilator/Makefile`` (target ``run-binary``) so
+      chipyard's ``sims/verilator/Makefile`` (target ``run-binary`` by
+      default, or ``run-binary-fast`` when ``fast=True``) so
       the invocation matches what ``capture artifact flow`` does remotely:
       correct ``+permissive / +dramsim / +max-cycles / +verbose`` flags,
       stderr piped through ``spike-dasm`` into ``{elf.stem}.out``, stdout
       ``tee``'d into ``{elf.stem}.log``. Those two chipyard-produced
-      files are then copied back into ``out_dir``.
+      files are then copied back into ``out_dir``. Fast mode intentionally
+      omits instruction trace output and writes a placeholder trace file.
 
     * **Direct mode** (Phase 3 v2 Docker flow): when ``make`` is absent
       from PATH, the chipyard ``sims/verilator/Makefile`` is missing, or
       ``QTENON_DIRECT_SIM=1`` is set, the simulator binary is invoked
-      directly with ``+permissive +verbose +permissive-off <elf>``.
+      directly with ``+permissive +verbose +permissive-off <elf>`` by default.
       stderr (chipyard chisel-printf trace) is captured as the raw trace;
       stdout (UART output via HTIF) becomes the log. ``filter_trace`` is
       independent of spike-dasm so this mode skips the dasm step entirely.
+      Fast mode drops ``+verbose`` and writes the same placeholder trace.
 
     In both modes the resulting filtered trace lands at
     ``out_dir/{elf.stem}.trace.txt`` (after :func:`tutorial.helpers.trace.filter_trace`,
@@ -312,7 +329,8 @@ def run_local_sim(
     emit different simulator-binary names entirely.
 
     ``cycle_count`` is the last parseable ``C<core>: <cycle>`` column of
-    the filtered trace; ``custom0_count`` is
+    the filtered trace, including ordinary host-resume markers preserved
+    after ``q_acquire``; ``custom0_count`` is
     ``len(parse_trace_text(trace_text))``.
     """
 
@@ -324,16 +342,21 @@ def run_local_sim(
         raise VerilatorMissing(f"simulator binary not found: {simulator}")
 
     if _direct_mode_available(chipyard_root):
-        raw_trace, log_text, wall = _run_direct(simulator, elf, out_dir)
+        raw_trace, log_text, wall = _run_direct(
+            simulator,
+            elf,
+            out_dir,
+            verbose=not fast,
+            sim_flags=sim_flags,
+        )
         log_path.write_text(log_text, encoding="utf-8")
-        trace_text = filter_trace(raw_trace)
+        if fast:
+            trace_text = f"- run-binary-fast: instruction trace omitted for {elf.name}\n"
+        else:
+            trace_text = filter_trace(raw_trace)
         trace_path.write_text(trace_text, encoding="utf-8")
         parsed = parse_trace_text(trace_text)
-        cycle_count = 0
-        for entry in reversed(parsed):
-            if entry.cycle is not None:
-                cycle_count = entry.cycle
-                break
+        cycle_count = last_trace_cycle(trace_text) or 0
         custom0_count = len(parsed)
         return LocalRunResult(
             trace_path=trace_path,
@@ -350,14 +373,17 @@ def run_local_sim(
         sim_dir / "output" / f"chipyard.harness.TestHarness.{config_name}"
     )
 
+    make_target = "run-binary-fast" if fast else "run-binary"
     make_argv: list[str] = [
         "make",
         "-C",
         str(sim_dir),
-        "run-binary",
+        make_target,
         f"CONFIG={config_name}",
         f"BINARY={elf.resolve()}",
     ]
+    if sim_flags:
+        make_argv.append(f"SIM_FLAGS={' '.join(sim_flags)}")
 
     start = time.monotonic()
     try:
@@ -368,18 +394,18 @@ def run_local_sim(
             text=True,
         )
     except FileNotFoundError as exc:
-        raise VerilatorMissing(f"make not available for run-binary: {exc}") from exc
+        raise VerilatorMissing(f"make not available for {make_target}: {exc}") from exc
     wall = time.monotonic() - start
 
     if completed.returncode != 0:
         raise VerilatorMissing(
-            f"make run-binary exited with status {completed.returncode}: "
+            f"make {make_target} exited with status {completed.returncode}: "
             f"{completed.stderr.strip() or completed.stdout.strip()}"
         )
 
     chipyard_log = chipyard_output / f"{elf.stem}.log"
     chipyard_trace = chipyard_output / f"{elf.stem}.out"
-    if not chipyard_log.is_file() or not chipyard_trace.is_file():
+    if not chipyard_log.is_file() or (not fast and not chipyard_trace.is_file()):
         raise VerilatorMissing(
             f"expected run-binary products missing under {chipyard_output}: "
             f"{chipyard_log.name}, {chipyard_trace.name}"
@@ -388,16 +414,15 @@ def run_local_sim(
     log_text = chipyard_log.read_text(encoding="utf-8")
     log_path.write_text(log_text, encoding="utf-8")
 
-    trace_raw = chipyard_trace.read_text(encoding="utf-8")
-    trace_text = filter_trace(trace_raw)
+    if fast:
+        trace_text = f"- run-binary-fast: instruction trace omitted for {elf.name}\n"
+    else:
+        trace_raw = chipyard_trace.read_text(encoding="utf-8")
+        trace_text = filter_trace(trace_raw)
     trace_path.write_text(trace_text, encoding="utf-8")
 
     parsed = parse_trace_text(trace_text)
-    cycle_count = 0
-    for entry in reversed(parsed):
-        if entry.cycle is not None:
-            cycle_count = entry.cycle
-            break
+    cycle_count = last_trace_cycle(trace_text) or 0
     custom0_count = len(parsed)
 
     return LocalRunResult(

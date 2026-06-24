@@ -546,6 +546,7 @@ class RunLocalSimTest(unittest.TestCase):
             f"C0:       1050 [1] pc=[0000000080000378] W[r 0=0000000000000000][0] R[r10=0] R[r11=0] inst=[{q_set_word:08x}] unknown\n"
             "HYBRID,0,12,38,01,250000,40f00ab900370026\n"
             f"C0:       2400 [1] pc=[0000000080000380] W[r10=42][1] R[r12=0] R[r 0=0] inst=[{q_acquire_word:08x}] unknown\n"
+            "C0:       2500 [1] pc=[0000000080000384] W[r 0=0][0] R[r 1=0] R[r 0=0] inst=[00008067] ret\n"
             "- /.../TestDriver.v:158: Verilog $finish\n"
         )
 
@@ -621,16 +622,69 @@ class RunLocalSimTest(unittest.TestCase):
             self.assertNotIn("HYBRID,0,12", trace_text)
             self.assertNotIn("INFO: booting", trace_text)
             self.assertIn("Verilog $finish", trace_text)
+            self.assertIn("inst=[00008067]", trace_text)
             parsed = parse_trace_text(trace_text)
             self.assertEqual(len(parsed), 2)
             self.assertEqual(result.custom0_count, 2)
 
             # cycle_count comes from the last parseable C<core>: cycle field.
-            self.assertEqual(result.cycle_count, 2400)
+            self.assertEqual(result.cycle_count, 2500)
 
             self.assertEqual(result.trace_bytes, result.trace_path.stat().st_size)
             self.assertEqual(result.log_bytes, result.log_path.stat().st_size)
             self.assertGreaterEqual(result.wall_seconds, 0.0)
+
+    def test_run_local_sim_fast_mode_does_not_require_instruction_trace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            sim_dir = tmp / "sims" / "verilator"
+            sim_dir.mkdir(parents=True)
+            (sim_dir / "Makefile").write_text("# stub\n", encoding="utf-8")
+            simulator = sim_dir / "simulator-chipyard.harness-QChipRocketConfig"
+            simulator.write_bytes(b"fake simulator")
+            elf = tmp / "paper_vqe_spsa.riscv"
+            elf.write_bytes(b"fake elf")
+            out_dir = tmp / "runs" / "paper"
+            chipyard_output = sim_dir / "output" / "chipyard.harness.TestHarness.QChipRocketConfig"
+
+            def fake_run(argv, **_):  # type: ignore[no-untyped-def]
+                self.assertIn("run-binary-fast", argv)
+                self.assertIn("SIM_FLAGS=+max-cycles=30000000", argv)
+                chipyard_output.mkdir(parents=True, exist_ok=True)
+                (chipyard_output / "paper_vqe_spsa.log").write_text(
+                    "paper_vqe_spsa,v3\n",
+                    encoding="utf-8",
+                )
+                return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+            scrubbed_env = {
+                k: v for k, v in os.environ.items() if k != "QTENON_DIRECT_SIM"
+            }
+            with mock.patch.dict(
+                "tutorial.helpers.local_run.os.environ",
+                scrubbed_env,
+                clear=True,
+            ), mock.patch(
+                "tutorial.helpers.local_run.shutil.which",
+                return_value="/usr/bin/make",
+            ), mock.patch(
+                "tutorial.helpers.local_run.subprocess.run",
+                side_effect=fake_run,
+            ):
+                result = run_local_sim(
+                    simulator,
+                    elf,
+                    out_dir,
+                    chipyard_root=tmp,
+                    config_name="QChipRocketConfig",
+                    fast=True,
+                    sim_flags=["+max-cycles=30000000"],
+                )
+
+            trace_text = result.trace_path.read_text(encoding="utf-8")
+            self.assertIn("instruction trace omitted", trace_text)
+            self.assertEqual(result.custom0_count, 0)
+            self.assertEqual(result.cycle_count, 0)
 
     def test_run_local_sim_raises_verilator_missing_when_binary_absent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_str:
@@ -720,6 +774,7 @@ class RunLocalSimTest(unittest.TestCase):
             "C0:      53637 [1] pc=[00000000800002ba] W[r 0=0000000000000000][0] R[r 0=0000000000000000] R[r 0=0000000000000000] inst=[0a00000b] unknown",
             "C0:      53638 [1] pc=[00000000800002be] W[r 0=0000000000000000][0] R[r24=0000000000000080] R[r 0=0000000000000000] inst=[080c600b] unknown",
             "C0:      53640 [1] pc=[00000000800002c6] W[r10=0000000000000000][0] R[r11=0000000080002170] R[r 0=0000000000000000] inst=[0c05e50b] unknown",
+            "C0:      54773 [1] pc=[00000000800002ca] W[r 0=0000000000000000][0] R[r 1=00000000800002ca] R[r 0=0000000000000000] inst=[00008067] ret",
         ]
         captured_log = (
             "[UART] UART0 is here (stdin/stdout).\n"
@@ -769,7 +824,7 @@ class RunLocalSimTest(unittest.TestCase):
             self.assertGreater(result.trace_bytes, 0)
             self.assertEqual(result.custom0_count, 16)
             self.assertGreater(result.cycle_count, 0)
-            self.assertEqual(result.cycle_count, 53640)
+            self.assertEqual(result.cycle_count, 54773)
             # Log should mirror stdout verbatim.
             self.assertEqual(result.log_path.read_text(encoding="utf-8"), captured_log)
 

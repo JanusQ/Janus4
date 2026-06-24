@@ -2,15 +2,12 @@ package qc
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.DataMirror
 
 import freechips.rocketchip.diplomacy._
 import org.chipsalliance.cde.config._
 import freechips.rocketchip.tile._
 import freechips.rocketchip.rocket._
 import freechips.rocketchip.tilelink._
-import scala.concurrent.ExecutionContext.Implicits
-import javax.xml.crypto.Data
 
 import TimeControllerISA._
 
@@ -99,7 +96,7 @@ class TimeController(implicit p: Parameters) extends LazyModule {
         }
 
         // Tilelink information
-        val tl_a = DataMirror.internal.chiselTypeClone[TLBundleA](tl.a.bits)
+        val tl_a = chiselTypeOf(tl.a.bits)
         val tl_a_queue = Module(new Queue(tl_a, 4))
         val get = edge.Get(
             fromSource = id,
@@ -111,7 +108,7 @@ class TimeController(implicit p: Parameters) extends LazyModule {
             lgSize = 4.U
         )._2
 
-        val tl_d = DataMirror.internal.chiselTypeClone[TLBundleD](tl.d.bits)
+        val tl_d = chiselTypeOf(tl.d.bits)
         val tl_d_queue = Module(new Queue(tl_d, 4))
 
         when(tl_a_queue.io.enq.fire && !tl_d_queue.io.deq.fire) {

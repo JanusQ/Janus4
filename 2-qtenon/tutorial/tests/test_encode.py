@@ -7,6 +7,7 @@ import unittest
 from tutorial.helpers.encode import (
     decode_instruction,
     identify_command,
+    pack_r_type,
     pack_q_acquire,
     pack_q_gen,
     pack_q_run,
@@ -33,6 +34,13 @@ class EncodeTest(unittest.TestCase):
         self.assertEqual(run["funct3"], 0b110)
         self.assertEqual(q_gen["funct7"], 5)
         self.assertEqual(q_gen["funct3"], 0)
+
+    def test_legacy_q_run_funct3_is_identified(self) -> None:
+        legacy_run = decode_instruction(
+            pack_r_type(opcode=0b0001011, funct3=0b011, funct7=4, rd=0, rs1=11, rs2=12)
+        )
+
+        self.assertEqual(identify_command(legacy_run), "q_run")
 
     def test_q_acquire_roundtrip(self) -> None:
         acquire = decode_instruction(pack_q_acquire(11, rd=10))

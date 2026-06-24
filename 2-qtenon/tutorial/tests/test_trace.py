@@ -5,10 +5,12 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from tutorial.helpers.encode import pack_q_acquire, pack_q_gen, pack_q_set, pack_q_update
+from tutorial.helpers.encode import pack_q_acquire, pack_q_gen, pack_q_run, pack_q_set, pack_q_update
 from tutorial.helpers.trace import (
     classify_path,
     filter_trace,
+    last_trace_cycle,
+    parse_acquire_completion_waits,
     parse_trace_text,
     split_hybrid_iterations,
 )
@@ -25,6 +27,12 @@ def _trace_line(cycle: int, pc: int, word: int) -> str:
     """Build a Rocket-chip-flavoured retire line that carries a 32-bit word."""
 
     return f"C0:{cycle:>10} [1] pc=[{pc:016x}] W[r10=0000000000000000][1] inst=[{word:08x}] DASM(custom0)"
+
+
+def _host_retire_line(cycle: int, pc: int, word: int = 0x00008067) -> str:
+    """Build an ordinary host retire line that should not decode as custom0."""
+
+    return f"C0:{cycle:>10} [1] pc=[{pc:016x}] W[r 0=0000000000000000][0] inst=[{word:08x}] DASM(ret)"
 
 
 class FilterTraceTest(unittest.TestCase):
@@ -57,11 +65,24 @@ class FilterTraceTest(unittest.TestCase):
     def test_preserves_original_order(self) -> None:
         first = _trace_line(10, 0x1000, pack_q_update(10, 11))
         second = _trace_line(20, 0x1004, pack_q_acquire(11, rd=10))
-        text = "\n".join(["junk", first, "more junk", second, "Verilog $finish: done"])
+        resume = _host_retire_line(1150, 0x1008)
+        text = "\n".join(
+            ["junk", first, "more junk", second, "noise", resume, "Verilog $finish: done"]
+        )
 
         kept = filter_trace(text).splitlines()
 
-        self.assertEqual(kept, [first, second, "Verilog $finish: done"])
+        self.assertEqual(kept, [first, second, resume, "Verilog $finish: done"])
+
+    def test_keeps_only_first_resume_after_acquire(self) -> None:
+        acquire = _trace_line(20, 0x1004, pack_q_acquire(11, rd=10))
+        first_resume = _host_retire_line(1150, 0x1008)
+        second_resume = _host_retire_line(1151, 0x100c)
+        text = "\n".join([acquire, first_resume, second_resume])
+
+        kept = filter_trace(text).splitlines()
+
+        self.assertEqual(kept, [acquire, first_resume])
 
 
 class ClassifyPathTest(unittest.TestCase):
@@ -99,6 +120,43 @@ class SplitHybridIterationsTest(unittest.TestCase):
         self.assertEqual(iterations[0][0].command, "q_set")
         for tail in iterations[1:]:
             self.assertEqual(tail[0].command, "q_update")
+
+    def test_real_capture_has_acquire_completion_waits(self) -> None:
+        trace_text = CAPTURE_TRACE.read_text(encoding="utf-8")
+
+        waits = parse_acquire_completion_waits(trace_text)
+
+        self.assertEqual(len(waits), 4)
+        self.assertEqual([wait.iteration for wait in waits], [0, 1, 2, 3])
+        for wait in waits:
+            with self.subTest(iteration=wait.iteration):
+                self.assertGreater(wait.acquire_to_resume_cycles, 0)
+                self.assertIsNotNone(wait.gen_to_resume_cycles)
+                self.assertGreater(wait.gen_to_resume_cycles, wait.acquire_to_resume_cycles)
+        last_cycle = last_trace_cycle(trace_text)
+        self.assertIsNotNone(last_cycle)
+        self.assertGreaterEqual(last_cycle, waits[-1].resume_cycle)
+
+
+class AcquireCompletionWaitTest(unittest.TestCase):
+    def test_parse_waits_pairs_acquire_with_following_host_retire(self) -> None:
+        text = "\n".join(
+            [
+                _trace_line(100, 0x2000, pack_q_set(10, 11)),
+                _trace_line(104, 0x2004, pack_q_gen()),
+                _trace_line(105, 0x2008, pack_q_run(12)),
+                _trace_line(110, 0x200c, pack_q_acquire(11, rd=10)),
+                _host_retire_line(1240, 0x2010),
+            ]
+        )
+
+        waits = parse_acquire_completion_waits(text)
+
+        self.assertEqual(len(waits), 1)
+        self.assertEqual(waits[0].iteration, 0)
+        self.assertEqual(waits[0].acquire_to_resume_cycles, 1130)
+        self.assertEqual(waits[0].gen_to_resume_cycles, 1136)
+        self.assertEqual(waits[0].run_to_resume_cycles, 1135)
 
 
 if __name__ == "__main__":

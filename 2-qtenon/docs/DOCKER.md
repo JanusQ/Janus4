@@ -1,75 +1,56 @@
-# Janus4 Docker — recommended attendee path
+# Docker — recommended attendee path
 
-The Janus4 tutorial ships as one Docker image. Qtenon runs inside that image
-with its own `qtenon` kernel, so attendees can run the notebook end-to-end
-(cross-compile + Verilator simulation included) without installing a local
-Python / Jupyter / RISC-V / Verilator toolchain.
+The Qtenon tutorial ships as a Docker image so attendees can run the notebook
+end-to-end (cross-compile + Verilator simulation included) without installing a
+local Python / Jupyter / RISC-V / Verilator toolchain.
 
 ---
 
 ## Attendee one-liner
 
 ```bash
-docker pull janusq/janus4:isca2026
-docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/janus4:isca2026
+docker pull janusq/qtenon:isca2026
+docker run --rm -p 127.0.0.1:8888:8888 janusq/qtenon:isca2026
 ```
 
 The container prints `http://localhost:8888/lab` (auth disabled — single-user
 local container; bind to `127.0.0.1` to keep it off the network). Open the
-URL, launch `2-qtenon/tutorial/qtenon_tutorial.ipynb`, select the
-`qtenon` kernel, and run **Restart Kernel and Run All Cells**.
+URL, launch `qtenon_tutorial.ipynb`, and run **Restart Kernel and Run All
+Cells**.
 
-Cells [3] (`compile_elf`) and [14] (`run_local_sim`) read the baked
-`tutorial/runs/hybrid_loop/` cache by default. That cache is generated during
-`docker build` from the bundled RISC-V toolchain and Verilator simulator, so
-normal attendee notebook runs avoid the slow simulation step. To force a fresh
-live run after editing the C source, launch the container with
-`-e QTENON_IGNORE_BAKED_CACHE=1`.
+Cells [3] (`compile_elf`) and [14] (`run_local_sim`) execute the **live** path
+inside the container — they cross-compile `hybrid_loop_demo.c` with the
+bundled RISC-V toolchain and run the bundled Verilator simulator, so editing
+the C source and re-running the cells reflects real retire-cycle deltas.
 
 ## Apple Silicon note
 
-The image is `linux/amd64` only — the bundled Qtenon RISC-V toolchain,
-Verilator simulator, and simulator-side shared libraries are x86_64 Linux
-artifacts. On Apple Silicon (M-series) Macs, run the amd64 image through
-Docker's cross-architecture emulation layer. Docker Desktop can do this
-directly; Colima also works when its VM has amd64 binfmt/QEMU support:
+The image is `linux/amd64` only — the bundled Verilator simulator is the
+x86_64 binary built on the validation environment host, with no upstream arm64 build available.
+On Apple Silicon (M-series) Macs, Docker Desktop runs the image under Rosetta:
 
 ```bash
-# Optional Colima setup on Apple Silicon.
-colima start --cpu 4 --memory 8 --disk 40
-
-docker pull --platform linux/amd64 janusq/janus4:isca2026
-docker run --rm \
-  --platform linux/amd64 \
-  -p 127.0.0.1:8888:8888 \
-  janusq/janus4:isca2026
+docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/qtenon:isca2026
 ```
 
-Do not switch the command to `--platform linux/arm64`: this tag does not ship a
-native ARM image. The container should report `x86_64` from `uname -m`; that is
-expected on ARM Macs because Docker is emulating the amd64 userspace. With the
-default baked cache, normal notebook execution avoids the slow Qtenon live
-simulation path. Expect a much larger slowdown if you explicitly set
-`QTENON_IGNORE_BAKED_CACHE=1` and force cell [14] to re-run the simulator.
+Expect roughly **3× slowdown** on the cell [14] simulation under Rosetta
+(≈ 5–6 min wallclock vs. ≈ 1–2 min on native amd64). All other cells finish
+in under a second; only the Verilator step is dominated by emulation cost.
 
 ## What's in the image
 
 - `python:3.11-slim-bookworm` base
 - JupyterLab 4.x + ipykernel + nbformat + nbclient + matplotlib + numpy
-- `qtenon` kernelspec for the Qtenon topic
-- `artery` kernelspec for the ARTERY feedback topic
-- `adaptiveqc` kernelspec for the AdaptDQC topic
-- `chocoq` kernelspec for the Choco-Q topic
-- `qram` kernelspec for the EXP-QRAM topic
+- `qtenon-venv` kernelspec (matches the venv-based name from `SETUP.md`)
 - RISC-V cross-compile toolchain at `/opt/qtenon-toolchain/` —
   `riscv64-unknown-elf-gcc` 12.2.0, `htif_nano.specs`, libgloss-htif, and
   matching libgmp / libmpfr / libmpc / libz
 - Pre-built Verilator simulator at `/usr/local/bin/qtenon-sim` and the
   Chipyard-built `libriscv.so` / `libdramsim.so` at `/opt/qtenon-sim-libs/`
   (resolved via `LD_LIBRARY_PATH`)
-- Tutorial content under `/workspace/`, including the numbered topic tree
-  `2-qtenon/` through `6-EXP-QRAM/` (host-only caches and generated outputs are
-  excluded by the root `.dockerignore`)
+- Tutorial content under `/workspace/code/` (the entire `code/` tree minus
+  `.venv`, `runs/`, `__pycache__`, and host-only Trellis state — see
+  `.dockerignore`)
 - Environment hooks: `QTENON_RISCV_GCC`, `QTENON_SIMULATOR`,
   `LD_LIBRARY_PATH` are pre-set so `compile_elf` / `run_local_sim` find the
   bundled toolchain without a Chipyard tree on disk
@@ -88,12 +69,8 @@ simulation path. Expect a much larger slowdown if you explicitly set
 
 ## Contributor rebuild flow
 
-The Janus4 image is built from the repository root. It uses
-`janusq/qtenon:isca2026` as the base layer for the Qtenon toolchain/simulator,
-then adds the numbered Janus4 topic tree and topic-specific kernels.
-
-If the Qtenon Verilator simulator or RISC-V toolchain changes, refresh and
-publish the Qtenon base image first. The historical base-image rebuild flow is:
+The image is rebuilt from the host repo whenever the Verilator simulator,
+the toolchain tarball, or the tutorial code changes. Steps:
 
 1. **Stage the simulator** — on validation environment, build
    `simulator-chipyard.harness-QChipRocketConfig`, then copy it to the host's
@@ -111,31 +88,32 @@ publish the Qtenon base image first. The historical base-image rebuild flow is:
 3. **Stage the simulator's chipyard-built libs** — `libriscv.so` and
    `libdramsim.so`, stripped on validation environment (`strip --strip-unneeded`), packed as
    `build/qtenon-sim-libs-amd64.tar.gz`.
-4. **Build** the Janus4 image from repo root:
+4. **Build** from repo root:
    ```bash
-   docker build --platform linux/amd64 -t janusq/janus4:isca2026 .
+   docker build -t janusq/qtenon:isca2026 .
    ```
 5. **Smoke test** before pushing:
    ```bash
-   bash scripts/smoke_docker.sh
+   bash tutorial/scripts/smoke_docker.sh
    ```
-   During `docker build`, the Qtenon notebook is executed once and its
-   compiled ELF, simulator trace/log, and executed notebook are baked into the
-   image under `/opt/qtenon-smoke-cache/` and
-   `/workspace/2-qtenon/tutorial/runs/hybrid_loop/`. Later smoke runs only
-   verify that baked cache instead of re-running the slow notebook. Use
-   `--build-arg QTENON_NOTEBOOK_TIMEOUT=...` if the build-time validation
-   needs a larger per-cell timeout.
+   This rebuilds + runs `python -m tutorial.validate_notebook` inside the
+   image and exits non-zero on any cell failure.
 6. **Push** to Docker Hub (requires `docker login` with a credential
    authorized on the `janusq` org):
    ```bash
-   docker push janusq/janus4:isca2026
+   docker push janusq/qtenon:isca2026
    ```
 7. **Pin the digest** — record the resulting `sha256:…` here so attendees
-   can pull deterministically: `docker pull janusq/janus4@sha256:<digest>`.
+   can pull deterministically: `docker pull janusq/qtenon@sha256:<digest>`.
 
 ### Published digest
 
+For attendees who want a deterministic pull pinned to a specific build:
+
+```bash
+docker pull janusq/qtenon@sha256:8140d2e3bca30077c30b99dcbfa5b05f491dc51bf89dfe5b9ee5927262aeef42
+```
+
 | Tag | Digest | Date |
 |---|---|---|
-| `janusq/janus4:isca2026` | TBD | TBD |
+| `janusq/qtenon:isca2026` | `sha256:8140d2e3bca30077c30b99dcbfa5b05f491dc51bf89dfe5b9ee5927262aeef42` | 2026-04-27 |

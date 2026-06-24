@@ -1,0 +1,1 @@
+- run-binary-fast: instruction trace omitted for paper_vqe_spsa.riscv

@@ -76,6 +76,23 @@ class ArchiveTest(unittest.TestCase):
         self.assertEqual(int(hit.hex_word, 16), first_q_set.instruction)
         self.assertIn(".4byte", hit.raw_line)
 
+    def test_find_objdump_line_accepts_word_with_leading_zeroes(self) -> None:
+        capture = load_capture_static(self.paths.captures_dir, "hybrid_loop")
+        parsed = parse_trace_text(capture.trace_text)
+        first_acquire = next(entry for entry in parsed if entry.command == "q_acquire")
+        self.assertIsNotNone(first_acquire.pc)
+        assert first_acquire.pc is not None
+
+        hit = find_objdump_line(
+            capture.objdump_text,
+            first_acquire.pc,
+            first_acquire.instruction,
+        )
+
+        self.assertIsInstance(hit, ObjdumpLine)
+        self.assertEqual(int(hit.hex_word, 16), first_acquire.instruction)
+        self.assertIn(".word", hit.raw_line)
+
     def test_find_objdump_line_raises_when_word_mismatch(self) -> None:
         capture = load_capture_static(self.paths.captures_dir, "hybrid_loop")
         parsed = parse_trace_text(capture.trace_text)

@@ -133,4 +133,6 @@ def identify_command(decoded: dict[str, int]) -> str | None:
     for name, spec in ENCODING_SPECS.items():
         if decoded["opcode"] == CUSTOM0_OPCODE and decoded["funct3"] == spec.funct3 and decoded["funct7"] == spec.funct7:
             return name
+    if decoded["opcode"] == CUSTOM0_OPCODE and decoded["funct7"] == COMMAND_FUNCT7["q_run"]:
+        return "q_run"
     return None

@@ -37,6 +37,35 @@ class TraceInstruction:
     command: str | None
 
 
+@dataclass(frozen=True)
+class AcquireCompletionWait:
+    """The first host retire visible after a q_acquire command issues."""
+
+    iteration: int
+    acquire_line_number: int
+    resume_line_number: int
+    q_gen_cycle: int | None
+    q_run_cycle: int | None
+    acquire_cycle: int
+    resume_cycle: int
+
+    @property
+    def acquire_to_resume_cycles(self) -> int:
+        return self.resume_cycle - self.acquire_cycle
+
+    @property
+    def gen_to_resume_cycles(self) -> int | None:
+        if self.q_gen_cycle is None:
+            return None
+        return self.resume_cycle - self.q_gen_cycle
+
+    @property
+    def run_to_resume_cycles(self) -> int | None:
+        if self.q_run_cycle is None:
+            return None
+        return self.resume_cycle - self.q_run_cycle
+
+
 def _candidate_words(line: str) -> list[int]:
     """Return candidate 32-bit words from a trace line.
 
@@ -58,6 +87,21 @@ def _candidate_words(line: str) -> list[int]:
     return candidates
 
 
+def extract_trace_cycle(line: str) -> int | None:
+    """Extract the Rocket trace cycle column from one retire line."""
+
+    cycle_match = CYCLE_PATTERN.search(line)
+    if cycle_match is None:
+        return None
+    return int(cycle_match.group(1))
+
+
+def _is_retire_line(line: str) -> bool:
+    """Return true for parseable Rocket retire lines, custom or ordinary."""
+
+    return extract_trace_cycle(line) is not None and INST_PATTERN.search(line) is not None
+
+
 def extract_instruction_word(line: str, *, opcode: int = CUSTOM0_OPCODE) -> int | None:
     """Extract the first 32-bit word on a line that matches the desired opcode."""
 
@@ -68,21 +112,53 @@ def extract_instruction_word(line: str, *, opcode: int = CUSTOM0_OPCODE) -> int 
 
 
 def filter_trace(raw_text: str, *, opcode: int = CUSTOM0_OPCODE) -> str:
-    """Keep only lines that carry a recognised instruction word or the simulator $finish marker.
+    """Keep custom0 lines, q_acquire resume markers, and the simulator $finish marker.
 
     Mirrors the filter used by ``capture artifact generation flow`` so that
     live simulator runs and the archive capture pipeline share a single
     implementation. The output preserves original line ordering and always
     ends with a trailing newline when any lines are kept.
+
+    A RoCC ``q_acquire`` trace row is the command issue point. If the
+    controller is still waiting for a queued ``q_gen``/``q_run`` to complete,
+    the completion becomes visible when the host retires its next ordinary
+    instruction. The filtered trace therefore keeps the first parseable retire
+    line after every ``q_acquire`` in addition to the custom0 rows.
     """
 
     kept: list[str] = []
+    keep_next_retire_after_acquire = False
     for line in raw_text.splitlines():
-        if extract_instruction_word(line, opcode=opcode) is not None or "Verilog $finish" in line:
+        word = extract_instruction_word(line, opcode=opcode)
+        if word is not None:
+            kept.append(line)
+            if keep_next_retire_after_acquire and _is_retire_line(line):
+                keep_next_retire_after_acquire = False
+            command = identify_command(decode_instruction(word))
+            if command == "q_acquire":
+                keep_next_retire_after_acquire = True
+            continue
+
+        if keep_next_retire_after_acquire and _is_retire_line(line):
+            kept.append(line)
+            keep_next_retire_after_acquire = False
+            continue
+
+        if "Verilog $finish" in line:
             kept.append(line)
     if not kept:
         return ""
     return "\n".join(kept) + "\n"
+
+
+def last_trace_cycle(text: str) -> int | None:
+    """Return the last parseable Rocket retire cycle in a trace blob."""
+
+    for line in reversed(text.splitlines()):
+        cycle = extract_trace_cycle(line)
+        if cycle is not None:
+            return cycle
+    return None
 
 
 def classify_path(command_name: str | None) -> PathLabel:
@@ -110,12 +186,11 @@ def parse_trace_lines(lines: Iterable[str], *, opcode: int = CUSTOM0_OPCODE) -> 
             continue
 
         pc_match = PC_PATTERN.search(line)
-        cycle_match = CYCLE_PATTERN.search(line)
         decoded = decode_instruction(word)
         parsed.append(
             TraceInstruction(
                 line_number=index,
-                cycle=int(cycle_match.group(1)) if cycle_match else None,
+                cycle=extract_trace_cycle(line),
                 instruction=word,
                 raw_line=line,
                 pc=int(pc_match.group(1), 16) if pc_match else None,
@@ -176,3 +251,48 @@ def split_hybrid_iterations(instructions: Iterable[TraceInstruction]) -> list[li
     if current:
         groups.append(current)
     return groups
+
+
+def parse_acquire_completion_waits(text: str) -> list[AcquireCompletionWait]:
+    """Pair each q_acquire issue row with the first following host retire row."""
+
+    lines = text.splitlines()
+    instructions = parse_trace_lines(lines)
+    waits: list[AcquireCompletionWait] = []
+
+    for iteration_index, group in enumerate(split_hybrid_iterations(instructions)):
+        acquire = next((entry for entry in reversed(group) if entry.command == "q_acquire"), None)
+        if acquire is None or acquire.cycle is None:
+            continue
+
+        resume_line_number: int | None = None
+        resume_cycle: int | None = None
+        for line_number in range(acquire.line_number + 1, len(lines) + 1):
+            line = lines[line_number - 1]
+            if extract_instruction_word(line) is not None:
+                continue
+            cycle = extract_trace_cycle(line)
+            if cycle is None:
+                continue
+            resume_line_number = line_number
+            resume_cycle = cycle
+            break
+
+        if resume_line_number is None or resume_cycle is None:
+            continue
+
+        q_gen = next((entry for entry in group if entry.command == "q_gen"), None)
+        q_run = next((entry for entry in group if entry.command == "q_run"), None)
+        waits.append(
+            AcquireCompletionWait(
+                iteration=iteration_index,
+                acquire_line_number=acquire.line_number,
+                resume_line_number=resume_line_number,
+                q_gen_cycle=q_gen.cycle if q_gen else None,
+                q_run_cycle=q_run.cycle if q_run else None,
+                acquire_cycle=acquire.cycle,
+                resume_cycle=resume_cycle,
+            )
+        )
+
+    return waits

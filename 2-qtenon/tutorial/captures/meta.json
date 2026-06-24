@@ -4,17 +4,23 @@
       "elf_bytes": 37648,
       "elf_sha256": "979134d1e9f5e7d4c509e17eafe91f3a57289ac05dc21b3f6cc49cf8a8f08c57",
       "log_bytes": 456,
-      "trace_bytes": 2240
+      "trace_bytes": 2844
+    },
+    "paper_vqe_spsa": {
+      "elf_bytes": 39032,
+      "elf_sha256": "f5417d230ffc5eb11e8bf1b6f6057915af2cdf0f65a6e43276d4ffe273574dbe",
+      "log_bytes": 927,
+      "trace_bytes": 70
     }
   },
-  "captured_at_utc": "2026-04-24T09:14:52.840882Z",
+  "captured_at_utc": "2026-06-24T13:31:45.097491Z",
   "config_name": "QChipRocketConfig",
-  "config_sha256": "9712da100843e2f1b5358daa06897e32acab1da2a8dc83d9dd57c087bd058314",
+  "config_sha256": "9a62cf5f4f27f001bf80a1494095764e32728b8c8e495a5d21579b55867f6e00",
   "git_dirty": true,
-  "git_head": "16fa30e8a73a454a9d5a121ba465019392cde9e5",
-  "hw_tree_head": "b81d68b2d526791f2c2a96a5e60ff35abb2e0e61",
+  "git_head": "e88b2458e48c71d0c1adb73dd02c30fcb9731082",
+  "hw_tree_head": "541cef2e471bf8f5140d25fb6c3a090cd5ee52d6",
   "schema_version": 3,
   "toolchain_sha256": "d7be72d193b3c72eaa695c19e6628ed7768b1acd9317fa0a3b4c602ade6cd9a0",
-  "tutorial_tree_head": "02330ebdd349394d07a3a38afba1204a4e7e5722",
+  "tutorial_tree_head": "8bdfb4b80784fff56ee27f55319f0267513b4bbb",
   "verilator_version": "Verilator 5.008 2023-03-04 rev UNKNOWN.REV (mod)"
 }

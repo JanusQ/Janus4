@@ -103,9 +103,11 @@ class BackwardCompatReExportTest(unittest.TestCase):
         from tutorial.helpers.notebook_support import (
             CaptureMissing,
             CompileResult,
+            DEFAULT_TIMING_ASSUMPTIONS,
             LiveRun,
             LocalRunResult,
             ObjdumpLine,
+            PaperExperimentLog,
             StaticCapture,
             ToolchainMissing,
             VerilatorMissing,
@@ -113,7 +115,9 @@ class BackwardCompatReExportTest(unittest.TestCase):
             ensure_simulator,
             find_objdump_line,
             load_capture_static,
+            parse_paper_vqe_log,
             run_local_sim,
+            run_paper_vqe_spsa,
             source_block,
         )
 
@@ -121,6 +125,7 @@ class BackwardCompatReExportTest(unittest.TestCase):
         # than lookalikes with the same name.
         from tutorial.helpers import archive as _archive
         from tutorial.helpers import local_run as _local_run
+        from tutorial.helpers import paper_experiment as _paper_experiment
 
         self.assertIs(CaptureMissing, _archive.CaptureMissing)
         self.assertIs(StaticCapture, _archive.StaticCapture)
@@ -137,6 +142,10 @@ class BackwardCompatReExportTest(unittest.TestCase):
         self.assertIs(compile_elf, _local_run.compile_elf)
         self.assertIs(ensure_simulator, _local_run.ensure_simulator)
         self.assertIs(run_local_sim, _local_run.run_local_sim)
+        self.assertIs(PaperExperimentLog, _paper_experiment.PaperExperimentLog)
+        self.assertIs(DEFAULT_TIMING_ASSUMPTIONS, _paper_experiment.DEFAULT_TIMING_ASSUMPTIONS)
+        self.assertIs(parse_paper_vqe_log, _paper_experiment.parse_paper_vqe_log)
+        self.assertIs(run_paper_vqe_spsa, _paper_experiment.run_paper_vqe_spsa)
 
 
 if __name__ == "__main__":

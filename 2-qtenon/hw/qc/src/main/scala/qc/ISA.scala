@@ -9,6 +9,8 @@ object QunatumControllerISA {
     val Q_RUN_CMD     = 4.U
     val Q_GEN_CMD     = 5.U
     val Q_ACQUIRE_CMD = 6.U
+    val Q_READ_CMD    = 9.U
+    val Q_READ_RUN_TIMES_CMD = 10.U
 }
 
 object TimeControllerISA {

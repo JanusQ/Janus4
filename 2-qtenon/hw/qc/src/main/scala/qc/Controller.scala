@@ -18,7 +18,6 @@ import freechips.rocketchip.tilelink.TLIdentityNode
 import freechips.rocketchip.rocket.constants.MemoryOpConstants
 
 import QunatumControllerISA._
-import TimeControllerISA._
 import IndexTableWriteType._
 
 class QuantumController(qubit_number: Int)(implicit p: Parameters)
@@ -41,7 +40,7 @@ class QuantumControllerModule(outer: QuantumController)(implicit p: Parameters, 
         val index_table = Module(new IndexTable(qubit_number))
 
         // state machine
-        val s_idle :: s_mem_req :: s_mem_wait :: s_acquire_req :: s_resp :: Nil = Enum(5)
+        val s_idle :: s_mem_req :: s_mem_wait :: s_acquire_wait :: s_acquire_req :: s_resp :: Nil = Enum(6)
         val state = RegInit(s_idle)
 
         // register
@@ -59,15 +58,32 @@ class QuantumControllerModule(outer: QuantumController)(implicit p: Parameters, 
         val mem_dv = RegInit(false.B)
         val acquire_store_addr = RegInit(0.U(acquireStoreAddrWidth.W))
 
-        // tutorial-visible minimal backend state
+        // Tutorial-visible paper-aligned backend state.
+        // The full paper evaluates physical quantum timing separately, but this
+        // miniature backend keeps the ISA-visible ordering honest: q_gen has a
+        // PGU delay, q_run has shot-dependent completion, and q_acquire only
+        // returns completed measurements.
         val tutorialParamBase = "h0040".U(20.W)
+        val pguLatencyCountdownStart = 999.U(16.W) // 1000 PGU cycles, counted down from 999 to 0.
         val tutorialParamWords = RegInit(VecInit(Seq.fill(4)(0.U(16.W))))
+        val genParamWords = RegInit(VecInit(Seq.fill(4)(0.U(16.W))))
         val preparedParamWords = RegInit(VecInit(Seq.fill(4)(0.U(16.W))))
+        val runParamWords = RegInit(VecInit(Seq.fill(4)(0.U(16.W))))
         val preparedValid = RegInit(false.B)
+        val genBusy = RegInit(false.B)
+        val genCounter = RegInit(0.U(16.W))
+        val runBusy = RegInit(false.B)
+        val runQueued = RegInit(false.B)
+        val runCounter = RegInit(0.U(16.W))
+        val runShots = RegInit(0.U(16.W))
+        val queuedRunShots = RegInit(0.U(16.W))
         val genEpoch = RegInit(0.U(8.W))
         val runEpoch = RegInit(0.U(8.W))
+        val perfCounter = RegInit(0.U(64.W))
+        val completedRunShots = RegInit(0.U(32.W))
         val measureWord = RegInit(0.U(64.W))
         val measureValid = RegInit(false.B)
+        val acquireResponseOnly = RegInit(false.B)
         val fullStoreMask = Fill(xLen / 8, 1.U(1.W))
 
         // the length is based on qubit_number
@@ -88,11 +104,22 @@ class QuantumControllerModule(outer: QuantumController)(implicit p: Parameters, 
             outer.mem_read.module.io.output.bits.data,
         )
         val touchedParamWindow = WireDefault(false.B)
-        val activeParamWords = Wire(Vec(4, UInt(16.W)))
 
-        for (i <- 0 until 4) {
-            activeParamWords(i) := Mux(preparedValid, preparedParamWords(i), tutorialParamWords(i))
-        }
+        val runTheta0 = runParamWords(0)
+        val runTheta1 = runParamWords(1)
+        val runIter = runParamWords(2)
+        val runScoreWide = Wire(UInt(21.W))
+        val runObjectivePpm = Wire(UInt(20.W))
+        val runSampleMix = Wire(UInt(8.W))
+        val runSampleBits = Wire(UInt(2.W))
+        runScoreWide := (runTheta0 * 37.U) + (runTheta1 * 19.U) +
+                        (runIter * 53.U) + runShots + genEpoch + runEpoch
+        runObjectivePpm := Mux(runScoreWide(19, 0) >= 1000000.U, runScoreWide(19, 0) - 1000000.U, runScoreWide(19, 0))
+        runSampleMix := runObjectivePpm(7, 0) ^ runTheta0(7, 0) ^ runTheta1(7, 0) ^
+                        runIter(7, 0) ^ runShots(7, 0)
+        runSampleBits := runSampleMix(1, 0)
+
+        val measurementPending = runBusy || runQueued
 
         // CONNECTION for the accelerator
         // TODO: add more delicite control
@@ -102,6 +129,7 @@ class QuantumControllerModule(outer: QuantumController)(implicit p: Parameters, 
         io.resp.valid := (state === s_resp)
         io.resp.bits.rd := resp_rd
         io.resp.bits.data := resp_data
+        perfCounter := perfCounter + 1.U
 
         // TODO: using gated clock to save energy
 
@@ -124,41 +152,94 @@ class QuantumControllerModule(outer: QuantumController)(implicit p: Parameters, 
             switch(io.cmd.bits.inst.funct) {
                 is(Q_SET_CMD) { state := s_mem_req }
                 is(Q_ACQUIRE_CMD) {
-                    // Return the latest measurement word and mirror it into host memory when a buffer is provided.
-                    resp_data := Mux(measureValid, measureWord, 0.U)
                     acquire_store_addr := io.cmd.bits.rs1(acquireStoreAddrWidth - 1, 0)
-                    state := Mux(io.cmd.bits.rs1 === 0.U, s_resp, s_acquire_req)
+                    acquireResponseOnly := io.cmd.bits.rs1 === 0.U
+                    when(measureValid) {
+                        resp_data := measureWord
+                        state := Mux(io.cmd.bits.rs1 === 0.U, s_resp, s_acquire_req)
+                    }.elsewhen(measurementPending) {
+                        resp_data := 0.U
+                        state := s_acquire_wait
+                    }.otherwise {
+                        resp_data := 0.U
+                        state := Mux(io.cmd.bits.rs1 === 0.U, s_resp, s_acquire_req)
+                    }
                 }
                 is(Q_UPDATE_CMD) {
                     state := s_idle
                 }
                 is(Q_GEN_CMD) {
                     for (i <- 0 until 4) {
-                        preparedParamWords(i) := tutorialParamWords(i)
+                        genParamWords(i) := tutorialParamWords(i)
                     }
-                    preparedValid := true.B
-                    genEpoch := genEpoch + 1.U
+                    genBusy := true.B
+                    genCounter := pguLatencyCountdownStart
+                    preparedValid := false.B
+                    measureValid := false.B
                 }
                 is(Q_RUN_CMD) {
-                    val activeTheta0 = activeParamWords(0)
-                    val activeTheta1 = activeParamWords(1)
-                    val activeIter = activeParamWords(2)
-                    val scoreWide = Wire(UInt(21.W))
-                    val objectivePpm = Wire(UInt(20.W))
-                    val sampleMix = Wire(UInt(8.W))
-                    val sampleBits = Wire(UInt(2.W))
-
-                    scoreWide := (activeTheta0 * 37.U) + (activeTheta1 * 19.U) +
-                                 (activeIter * 53.U) + io.cmd.bits.rs1(15, 0) + genEpoch + runEpoch
-                    objectivePpm := Mux(scoreWide(19, 0) >= 1000000.U, scoreWide(19, 0) - 1000000.U, scoreWide(19, 0))
-                    sampleMix := objectivePpm(7, 0) ^ activeTheta0(7, 0) ^ activeTheta1(7, 0) ^
-                                 activeIter(7, 0) ^ io.cmd.bits.rs1(7, 0)
-                    sampleBits := sampleMix(1, 0)
-
-                    measureWord := Cat(1.U(2.W), activeIter(7, 0), sampleBits, objectivePpm, activeTheta1, activeTheta0)
-                    measureValid := true.B
-                    runEpoch := runEpoch + 1.U
+                    val shotCount = io.cmd.bits.rs1(15, 0)
+                    measureValid := false.B
+                    when(preparedValid) {
+                        for (i <- 0 until 4) {
+                            runParamWords(i) := preparedParamWords(i)
+                        }
+                        runShots := shotCount
+                        // Tutorial-scale quantum execution model: one cycle per requested shot.
+                        runCounter := Mux(shotCount === 0.U, 0.U, shotCount - 1.U)
+                        runBusy := true.B
+                        runQueued := false.B
+                    }.elsewhen(genBusy) {
+                        queuedRunShots := shotCount
+                        runQueued := true.B
+                    }
                 }
+                is(Q_READ_CMD) {
+                    // Compatibility path for the older paper-benchmark probes.
+                    resp_data := perfCounter
+                    state := s_resp
+                }
+                is(Q_READ_RUN_TIMES_CMD) {
+                    // Older workloads poll this value until a q_run batch has completed.
+                    resp_data := completedRunShots
+                    state := s_resp
+                }
+            }
+        }
+
+        when(genBusy) {
+            when(genCounter === 0.U) {
+                for (i <- 0 until 4) {
+                    preparedParamWords(i) := genParamWords(i)
+                }
+                preparedValid := true.B
+                genBusy := false.B
+                genEpoch := genEpoch + 1.U
+                when(runQueued) {
+                    for (i <- 0 until 4) {
+                        runParamWords(i) := genParamWords(i)
+                    }
+                    runShots := queuedRunShots
+                    // Tutorial-scale quantum execution model: one cycle per requested shot.
+                    runCounter := Mux(queuedRunShots === 0.U, 0.U, queuedRunShots - 1.U)
+                    runBusy := true.B
+                    runQueued := false.B
+                    measureValid := false.B
+                }
+            }.otherwise {
+                genCounter := genCounter - 1.U
+            }
+        }
+
+        when(runBusy) {
+            when(runCounter === 0.U) {
+                measureWord := Cat(1.U(2.W), runIter(7, 0), runSampleBits, runObjectivePpm, runTheta1, runTheta0)
+                measureValid := true.B
+                runBusy := false.B
+                runEpoch := runEpoch + 1.U
+                completedRunShots := completedRunShots + runShots
+            }.otherwise {
+                runCounter := runCounter - 1.U
             }
         }
 
@@ -168,6 +249,11 @@ class QuantumControllerModule(outer: QuantumController)(implicit p: Parameters, 
 
         when((state === s_mem_wait) && !outer.mem_read.module.io.busy) {
             state := s_idle
+        }
+
+        when((state === s_acquire_wait) && measureValid) {
+            resp_data := measureWord
+            state := Mux(acquireResponseOnly, s_resp, s_acquire_req)
         }
 
         when((state === s_acquire_req) && io.mem.req.fire) {
@@ -215,19 +301,6 @@ class QuantumControllerModule(outer: QuantumController)(implicit p: Parameters, 
             preparedValid := false.B
         }
 
-
-        // outer.time_controller.module.io.cmd.valid := (state === s_issue && (is_q_gen || is_q_run))
-        // outer.time_controller.module.io.cmd.bits.op := MuxLookup(funct, 0.U, Seq(
-        //     Q_GEN_CMD -> CACHE,
-        //     Q_RUN_CMD -> ISSUE
-        // ))
-        // outer.time_controller.module.io.cmd.bits.mem := rs1(38, 0)
-        // outer.time_controller.module.io.cmd.bits.local := rs2(38, 0)
-        // outer.time_controller.module.io.cmd.bits.length := rs2(54, 39)
-
-        // when(outer.time_controller.module.io.cmd.fire) {state := s_idle}
-
-        // TODO: determine what is the virtual address of Linux
 
         // Tutorial q_acquire mirrors the measurement word into host memory through the RoCC D-cache port.
         io.mem.req.valid := (state === s_acquire_req)

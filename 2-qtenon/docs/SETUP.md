@@ -16,16 +16,15 @@
 ## Docker (recommended)
 
 ```bash
-docker pull janusq/janus4:isca2026
-docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/janus4:isca2026
+docker pull janusq/qtenon:isca2026
+docker run --rm -p 127.0.0.1:8888:8888 janusq/qtenon:isca2026
 ```
 
 Opens JupyterLab on `http://localhost:8888/lab` with the tutorial notebook
-ready to run end-to-end at `2-qtenon/tutorial/qtenon_tutorial.ipynb`
-(cells [3] / [14] use the baked Qtenon run cache by default, with
-`QTENON_IGNORE_BAKED_CACHE=1` available for a fresh live run). See
-[`DOCKER.md`](DOCKER.md) for the full attendee guide and the contributor
-rebuild flow.
+ready to run end-to-end (cells [3] / [14] cross-compile and run the
+Verilator simulator live inside the container). On Apple Silicon, prepend
+`--platform linux/amd64`. See [`DOCKER.md`](DOCKER.md) for the full
+attendee guide and the contributor rebuild flow.
 
 ## Local Python Environment
 
@@ -47,7 +46,7 @@ runtime into the same `.venv`:
 
 ```bash
 python -m pip install ipykernel nbformat nbclient IPython jupyterlab
-python -m ipykernel install --prefix ./.venv --name qtenon --display-name "Qtenon"
+python -m ipykernel install --prefix ./.venv --name qtenon-venv --display-name "Qtenon .venv"
 ```
 
 If Qiskit is available or needed for legacy LUT generation:
@@ -60,8 +59,7 @@ python -m pip install qiskit
 
 The tutorial's default user workflow is replay-only:
 
-- open `2-qtenon/tutorial/qtenon_tutorial.ipynb` in the Janus4 image, or
-  `tutorial/qtenon_tutorial.ipynb` when working directly inside `2-qtenon/`
+- open `tutorial/qtenon_tutorial.ipynb`
 - execute it locally with the repo-local kernel
 - consume checked-in captures, objdumps, metadata, and figures from the repo
 
