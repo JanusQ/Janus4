@@ -28,17 +28,29 @@ live run after editing the C source, launch the container with
 
 ## Apple Silicon note
 
-The image is `linux/amd64` only — the bundled Verilator simulator is the
-x86_64 binary built on the validation environment host, with no upstream arm64 build available.
-On Apple Silicon (M-series) Macs, Docker Desktop runs the image under Rosetta:
+The image is `linux/amd64` only — the bundled Qtenon RISC-V toolchain,
+Verilator simulator, and simulator-side shared libraries are x86_64 Linux
+artifacts. On Apple Silicon (M-series) Macs, run the amd64 image through
+Docker's cross-architecture emulation layer. Docker Desktop can do this
+directly; Colima also works when its VM has amd64 binfmt/QEMU support:
 
 ```bash
-docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/janus4:isca2026
+# Optional Colima setup on Apple Silicon.
+colima start --cpu 4 --memory 8 --disk 40
+
+docker pull --platform linux/amd64 janusq/janus4:isca2026
+docker run --rm \
+  --platform linux/amd64 \
+  -p 127.0.0.1:8888:8888 \
+  janusq/janus4:isca2026
 ```
 
-Expect roughly **3× slowdown** when forcing the cell [14] live simulation under
-Rosetta (≈ 5–6 min wallclock vs. ≈ 1–2 min on native amd64). With the default
-baked cache, normal notebook execution avoids that slow path.
+Do not switch the command to `--platform linux/arm64`: this tag does not ship a
+native ARM image. The container should report `x86_64` from `uname -m`; that is
+expected on ARM Macs because Docker is emulating the amd64 userspace. With the
+default baked cache, normal notebook execution avoids the slow Qtenon live
+simulation path. Expect a much larger slowdown if you explicitly set
+`QTENON_IGNORE_BAKED_CACHE=1` and force cell [14] to re-run the simulator.
 
 ## What's in the image
 

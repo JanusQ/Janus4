@@ -16,6 +16,30 @@ contains the numbered topic tree and topic-specific kernels, including
 `qtenon` for Qtenon, `artery` for ARTERY, `adaptiveqc` for AdaptDQC,
 `chocoq` for Choco-Q, and `qram` for EXP-QRAM.
 
+### Apple Silicon / ARM Mac
+
+The published tutorial image is currently `linux/amd64` only because the
+bundled Qtenon RISC-V toolchain and Verilator simulator artifacts are built for
+x86_64 Linux. On Apple Silicon Macs, run the same image through Docker's
+cross-architecture emulation layer:
+
+```bash
+# Docker Desktop or Colima both work. With Colima:
+colima start --cpu 4 --memory 8 --disk 40
+
+docker pull --platform linux/amd64 janusq/janus4:isca2026
+docker run --rm \
+  --platform linux/amd64 \
+  -p 127.0.0.1:8888:8888 \
+  janusq/janus4:isca2026
+```
+
+Do not switch the command to `--platform linux/arm64`: there is no native ARM
+image for this tag. Inside the container, `uname -m` will report `x86_64` even
+on an ARM Mac. That is expected. Normal tutorial notebook runs use baked Qtenon
+simulation caches, so the emulation overhead is modest; forcing a fresh Qtenon
+live simulation with `QTENON_IGNORE_BAKED_CACHE=1` will be much slower.
+
 ## Topics
 
 - **[`2-qtenon/`](2-qtenon/)** — Topic 2: low-latency quantum-classical hybrid control on a RISC-V + RoCC accelerator. Hybrid-loop demo with baked Verilator run artifacts in the Janus4 image.
