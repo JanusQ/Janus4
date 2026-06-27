@@ -21,7 +21,7 @@ Recommended presentation flow:
 The tutorial notebook is split and expanded from the original software feedback notebook with ARTERY-specific explanations:
 
 ```text
-tutorial/3_1_artery_feedback_tutorial.ipynb
+tutorial/5_1_artery_feedback_tutorial.ipynb
 tutorial/s21_data.mat.gz
 tutorial/results/   Static figures used by the notebooks
 ```

@@ -1,6 +1,6 @@
 # Choco-Q
 
-Topic 5 of the Janus 4.0 tutorial imports the Choco-Q constrained binary optimization demo from JanusQ.
+Topic 6 of the Janus 4.0 tutorial imports the Choco-Q constrained binary optimization demo from JanusQ.
 
 ## Layout
 
@@ -18,12 +18,12 @@ docker pull janusq/janus4:isca2026
 docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/janus4:isca2026
 ```
 
-Then open `5-Choco-Q/tutorial/6_1_constrained_binary_optimization.ipynb`
+Then open `6-Choco-Q/tutorial/6_1_constrained_binary_optimization.ipynb`
 and select the `Choco-Q` kernel. The image uses `gurobipy==13.0.2`, whose
 pip-bundled restricted license is enough for this small tutorial model.
 
 For a quick import and notebook execution check:
 
 ```bash
-5-Choco-Q/scripts/smoke_docker.sh
+6-Choco-Q/scripts/smoke_docker.sh
 ```

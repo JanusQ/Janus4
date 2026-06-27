@@ -12,7 +12,7 @@ cd "${REPO_ROOT}"
 
 docker build --platform "${PLATFORM_FLAG}" -t "${IMAGE_TAG}" .
 
-docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/4-adaptDQC -i "${IMAGE_TAG}" /opt/adaptdqc-venv/bin/python - <<'PY'
+docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/3-adaptDQC -i "${IMAGE_TAG}" /opt/adaptdqc-venv/bin/python - <<'PY'
 from adaptivedqc.assessment import QPU
 from adaptivedqc.assignQubit.compile import Partcompile
 from adaptivedqc.hypridDQC.wireCut import CutWire
@@ -20,7 +20,7 @@ from adaptivedqc.hypridDQC.wireCut import CutWire
 print("AdaptDQC imports passed")
 PY
 
-docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/4-adaptDQC "${IMAGE_TAG}" \
+docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/3-adaptDQC "${IMAGE_TAG}" \
   python -m jupyter nbconvert \
   --to notebook \
   --execute "${NOTEBOOK}" \

@@ -13,14 +13,14 @@ cd "${REPO_ROOT}"
 
 docker build --platform "${PLATFORM_FLAG}" -t "${IMAGE_TAG}" .
 
-docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/6-EXP-QRAM -i "${IMAGE_TAG}" /opt/qram-venv/bin/python - <<'PY'
+docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/4-EXP-QRAM -i "${IMAGE_TAG}" /opt/qram-venv/bin/python - <<'PY'
 from qram.config import Config
 from qram.qramtemplate.buckdatacell import Qram, cswap_depth, swap_depth
 
 print("QRAM imports passed")
 PY
 
-docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/6-EXP-QRAM "${IMAGE_TAG}" \
+docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/4-EXP-QRAM "${IMAGE_TAG}" \
   python -m jupyter nbconvert \
   --to notebook \
   --execute "${NOTEBOOK}" \

@@ -11,10 +11,10 @@ on:
       - Dockerfile
       - scripts/**
       - 2-qtenon/**
-      - 3-artery/**
-      - 4-adaptDQC/**
-      - 5-Choco-Q/**
-      - 6-EXP-QRAM/**
+      - 5-artery/**
+      - 3-adaptDQC/**
+      - 6-Choco-Q/**
+      - 4-EXP-QRAM/**
   workflow_dispatch:
 
 concurrency:

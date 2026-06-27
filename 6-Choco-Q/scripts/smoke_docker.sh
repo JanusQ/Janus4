@@ -20,7 +20,7 @@ from chocoq.solvers.qiskit import AerProvider, ChocoSolver, DdsimProvider
 print("Choco-Q imports passed")
 PY
 
-docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/5-Choco-Q "${IMAGE_TAG}" \
+docker run --rm --platform "${PLATFORM_FLAG}" --workdir /workspace/6-Choco-Q "${IMAGE_TAG}" \
   python -m jupyter nbconvert \
   --to notebook \
   --execute "${NOTEBOOK}" \

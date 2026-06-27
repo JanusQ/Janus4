@@ -6,7 +6,7 @@ default `FakeBelem` backend properties used by `adaptivedqc.assessment.QPU`.
 
 ## Environment
 
-From the `4-adaptDQC/` directory:
+From the `3-adaptDQC/` directory:
 
 ```bash
 uv python install 3.10

@@ -77,7 +77,7 @@ The GUI can configure the bitstream, network parameters, S21 input file, FPGA pr
 The tutorial notebook is:
 
 ```text
-tutorial/3_1_artery_feedback_tutorial.ipynb
+tutorial/5_1_artery_feedback_tutorial.ipynb
 ```
 
 The S21 dataset is included as a compressed MAT file:

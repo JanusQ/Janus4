@@ -44,10 +44,10 @@ emulation overhead is modest; opting into fresh Qtenon live simulation with
 ## Topics
 
 - **[`2-qtenon/`](2-qtenon/)** — Topic 2: low-latency quantum-classical hybrid control on a RISC-V + RoCC accelerator. Hybrid-loop and paper-figure walkthroughs use checked-in replay captures by default, with a baked notebook smoke cache in the Janus4 image.
-- **[`3-artery/`](3-artery/)** — Topic 3: ARTERY-style low-latency quantum feedback with S21/IQ analysis, trajectory prediction, compressed tutorial data in the `artery` kernel, hardware interface notes, and GUI/UDP demos.
-- **[`4-adaptDQC/`](4-adaptDQC/)** — Topic 4: adaptive distributed quantum computing with local Qiskit simulation in the `adaptiveqc` kernel.
-- **[`5-Choco-Q/`](5-Choco-Q/)** — Topic 5: constrained binary optimization with Choco-Q in the `chocoq` kernel.
-- **[`6-EXP-QRAM/`](6-EXP-QRAM/)** — Topic 6: bucket-brigade QRAM circuit construction, simulation, and processed data visualization in the `qram` kernel.
+- **[`3-adaptDQC/`](3-adaptDQC/)** — Topic 3: adaptive distributed quantum computing with local Qiskit simulation in the `adaptiveqc` kernel.
+- **[`4-EXP-QRAM/`](4-EXP-QRAM/)** — Topic 4: bucket-brigade QRAM circuit construction, simulation, and processed data visualization in the `qram` kernel.
+- **[`5-artery/`](5-artery/)** — Topic 5: ARTERY-style low-latency quantum feedback with S21/IQ analysis, trajectory prediction, compressed tutorial data in the `artery` kernel, hardware interface notes, and GUI/UDP demos.
+- **[`6-Choco-Q/`](6-Choco-Q/)** — Topic 6: constrained binary optimization with Choco-Q in the `chocoq` kernel.
 
 ## Adding a new topic
 

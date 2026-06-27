@@ -30,13 +30,13 @@ docker pull janusq/janus4:isca2026
 docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/janus4:isca2026
 ```
 
-Then open `4-adaptDQC/tutorial/adaptdqc_tutorial.ipynb` and select the
+Then open `3-adaptDQC/tutorial/adaptdqc_tutorial.ipynb` and select the
 `AdaptDQC` kernel.
 
 For a quick import and notebook execution check:
 
 ```bash
-4-adaptDQC/scripts/smoke_docker.sh
+3-adaptDQC/scripts/smoke_docker.sh
 ```
 
 ## Local Environment

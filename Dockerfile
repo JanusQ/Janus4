@@ -34,41 +34,41 @@ RUN cd /workspace/2-qtenon \
     && QTENON_NOTEBOOK_TIMEOUT="${QTENON_NOTEBOOK_TIMEOUT}" \
        bash tutorial/scripts/build_smoke_cache.sh
 
-COPY 3-artery/software/requirements.txt /tmp/artery-requirements.txt
+COPY 5-artery/software/requirements.txt /tmp/artery-requirements.txt
 RUN "${ARTERY_VENV}/bin/python" -m pip install --upgrade pip setuptools wheel \
     && "${ARTERY_VENV}/bin/python" -m pip install --no-cache-dir -r /tmp/artery-requirements.txt ipykernel
 
-COPY 5-Choco-Q/requirements.txt /tmp/chocoq-requirements.txt
+COPY 6-Choco-Q/requirements.txt /tmp/chocoq-requirements.txt
 RUN "${CHOCOQ_VENV}/bin/python" -m pip install --upgrade pip setuptools wheel \
     && "${CHOCOQ_VENV}/bin/python" -m pip install --no-cache-dir -r /tmp/chocoq-requirements.txt
 
-COPY 4-adaptDQC/requirements.txt /tmp/adaptdqc-requirements.txt
+COPY 3-adaptDQC/requirements.txt /tmp/adaptdqc-requirements.txt
 RUN python -m pip install --upgrade pip setuptools wheel uv \
     && uv python install 3.10 \
     && uv venv --python 3.10 "${ADAPTDQC_VENV}" \
     && uv pip install --python "${ADAPTDQC_VENV}/bin/python" -r /tmp/adaptdqc-requirements.txt
 
-COPY 6-EXP-QRAM/requirements-docker.txt /tmp/qram-requirements.txt
+COPY 4-EXP-QRAM/requirements-docker.txt /tmp/qram-requirements.txt
 RUN uv python install 3.9 \
     && uv venv --python 3.9 "${QRAM_VENV}" \
     && uv pip install --python "${QRAM_VENV}/bin/python" -r /tmp/qram-requirements.txt
 
 COPY README.md LICENSE /workspace/
-COPY 3-artery/ /workspace/3-artery/
-COPY 4-adaptDQC/ /workspace/4-adaptDQC/
-COPY 5-Choco-Q/ /workspace/5-Choco-Q/
+COPY 5-artery/ /workspace/5-artery/
+COPY 3-adaptDQC/ /workspace/3-adaptDQC/
+COPY 6-Choco-Q/ /workspace/6-Choco-Q/
 
-RUN "${ARTERY_VENV}/bin/python" -m pip install --no-cache-dir --no-deps -e /workspace/3-artery/software \
+RUN "${ARTERY_VENV}/bin/python" -m pip install --no-cache-dir --no-deps -e /workspace/5-artery/software \
     && "${ARTERY_VENV}/bin/python" -m ipykernel install --prefix=/usr/local --name artery --display-name "Artery"
 
-RUN "${CHOCOQ_VENV}/bin/python" -m pip install --no-cache-dir --no-deps -e /workspace/5-Choco-Q \
+RUN "${CHOCOQ_VENV}/bin/python" -m pip install --no-cache-dir --no-deps -e /workspace/6-Choco-Q \
     && "${CHOCOQ_VENV}/bin/python" -m ipykernel install --prefix=/usr/local --name chocoq --display-name "Choco-Q"
 
 RUN "${ADAPTDQC_VENV}/bin/python" -m ipykernel install --prefix=/usr/local --name adaptiveqc --display-name "AdaptDQC"
 
-COPY 6-EXP-QRAM/ /workspace/6-EXP-QRAM/
+COPY 4-EXP-QRAM/ /workspace/4-EXP-QRAM/
 
-RUN uv pip install --python "${QRAM_VENV}/bin/python" --no-deps -e /workspace/6-EXP-QRAM \
+RUN uv pip install --python "${QRAM_VENV}/bin/python" --no-deps -e /workspace/4-EXP-QRAM \
     && "${QRAM_VENV}/bin/python" -m ipykernel install --prefix=/usr/local --name qram --display-name "QRAM"
 
 COPY .vscode/ /workspace/.vscode/
