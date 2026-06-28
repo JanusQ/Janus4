@@ -781,7 +781,7 @@ class RunLocalSimTest(unittest.TestCase):
             "mode=Act 3 minimal hardware loop\n"
             "iter,theta0_idx,theta1_idx,sample_bits,objective_ppm,acquire_word\n"
             "0,12,38,01,1295,4616195180039897100\n"
-            "- simulator/verilator/generated-src/X.v:158: Verilog $finish\n"
+            "- simulator/generated-src/X.v:158: Verilog $finish\n"
         )
 
         with tempfile.TemporaryDirectory() as tmp_str:

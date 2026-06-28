@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime
 from pathlib import Path
+import tempfile
 import time
 
 import nbformat
@@ -34,7 +35,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("qtenon_tutorial.executed.ipynb"),
+        default=Path(tempfile.gettempdir()) / "qtenon_tutorial.executed.ipynb",
         help="Where to write the executed notebook copy.",
     )
     return parser.parse_args()

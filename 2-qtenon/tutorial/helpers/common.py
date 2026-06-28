@@ -31,8 +31,8 @@ class TutorialPaths:
         ``chipyard_root`` and ``config_name`` are read from the environment
         (``QTENON_CHIPYARD_ROOT`` / ``QTENON_CONFIG_NAME``) so the notebook
         can target different chipyard checkouts without code edits.
-        Defaults mirror a conventional Chipyard checkout location
-        (``chipyard checkout`` / ``QChipRocketConfig``).
+        Defaults mirror a conventional local Chipyard checkout with
+        ``QChipRocketConfig``.
         The laptop fallback path does not require ``chipyard_root`` to
         exist on disk — ``ensure_simulator`` raises ``ToolchainMissing``
         when the tree is absent.
