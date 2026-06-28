@@ -19,7 +19,10 @@ The notebook follows the paper's core workflow:
 5. compile remote gates with GateComm / EPR teleportation;
 6. show adaptive goal selection by choosing different allocations under
    communication and latency objectives;
-7. compose QubitComm and GateComm in a small HybridComm example.
+7. visualize the graph progression from TDAG simplification to clustering and
+   fine-tuning;
+8. compare several cases with objective-driven EPR/depth plots;
+9. compose QubitComm and GateComm in a small HybridComm example.
 
 ## Docker
 
@@ -90,6 +93,8 @@ statevector simulation and the default `FakeBelem` backend properties used by
 | GateComm | remote-gate allocation and EPR-pair insertion |
 | HybridComm | wire-cut first, then EPR-compile a still-wide subcircuit |
 | Adaptive objectives | communication-oriented vs latency-oriented allocation choices |
+| Graph evolution | TDAG simplification, cluster assignment, and fine-tuning plots |
+| Multi-case comparison | EPR-pair and compiled-depth charts across small circuits |
 
 ## Minimal API Examples
 

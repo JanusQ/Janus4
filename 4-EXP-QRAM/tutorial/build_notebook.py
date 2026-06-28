@@ -459,10 +459,80 @@ for mode in ["native", "cswap_decompose", "subspace_decompose"]:
         }
     )
 
-print("Resource comparison across CSWAP implementation modes")
-display(pd.DataFrame(mode_rows))
-print("Statevector readout error for each implementation mode")
-display(pd.DataFrame(readout_rows))
+mode_resource = pd.DataFrame(mode_rows).drop(columns=["ops"])
+mode_errors = pd.DataFrame(readout_rows)
+mode_labels = mode_resource["mode"].str.replace("_", "\n")
+mode_colors = ["#4E79A7", "#F28E2B", "#59A14F"]
+
+fig, axes = plt.subplots(1, 3, figsize=(16, 4.3), constrained_layout=True)
+
+resource_metrics = ["depth", "size", "swap_depth", "cswap_or_cz_depth"]
+x = np.arange(len(mode_resource))
+bar_width = 0.18
+for metric_idx, metric in enumerate(resource_metrics):
+    axes[0].bar(
+        x + (metric_idx - 1.5) * bar_width,
+        mode_resource[metric],
+        bar_width,
+        label=metric.replace("_", " "),
+    )
+axes[0].set_xticks(x)
+axes[0].set_xticklabels(mode_labels)
+axes[0].set_ylabel("count")
+axes[0].set_title("Resource cost by CSWAP mode")
+axes[0].legend(fontsize=8, frameon=False)
+axes[0].grid(True, axis="y", alpha=0.3)
+
+scatter = axes[1].scatter(
+    mode_resource["swap_depth"],
+    mode_resource["cswap_or_cz_depth"],
+    s=np.maximum(mode_resource["size"], 1) * 24,
+    c=mode_resource["depth"],
+    cmap="viridis",
+    edgecolors="black",
+    linewidths=0.7,
+)
+for _, row in mode_resource.iterrows():
+    axes[1].annotate(
+        row["mode"].replace("_", "\n"),
+        (row["swap_depth"], row["cswap_or_cz_depth"]),
+        textcoords="offset points",
+        xytext=(6, 5),
+        fontsize=8,
+    )
+axes[1].set_xlabel("SWAP depth")
+axes[1].set_ylabel("CSWAP/CZ depth")
+axes[1].set_title("Depth trade-off scatter")
+axes[1].grid(True, alpha=0.3)
+fig.colorbar(scatter, ax=axes[1], label="circuit depth")
+
+error_metrics = ["max_abs_delta", "l1_error"]
+for metric_idx, metric in enumerate(error_metrics):
+    axes[2].bar(
+        x + (metric_idx - 0.5) * 0.32,
+        mode_errors[metric],
+        0.32,
+        label=metric.replace("_", " "),
+        color=["#76B7B2", "#E15759"][metric_idx],
+        edgecolor="black",
+        linewidth=0.5,
+    )
+axes[2].set_xticks(x)
+axes[2].set_xticklabels(mode_labels)
+axes[2].set_ylabel("absolute probability error")
+axes[2].set_title("Readout error remains near zero")
+axes[2].legend(fontsize=8, frameon=False)
+axes[2].grid(True, axis="y", alpha=0.3)
+axes[2].set_ylim(0, max(float(mode_errors[error_metrics].to_numpy().max()) * 1.2, 1e-12))
+axes[2].ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+
+plt.show()
+
+lowest_depth = mode_resource.loc[mode_resource["depth"].idxmin(), "mode"]
+smallest_size = mode_resource.loc[mode_resource["size"].idxmin(), "mode"]
+largest_l1 = mode_errors["l1_error"].max()
+print(f"Lowest-depth mode: {lowest_depth}; smallest circuit-size mode: {smallest_size}.")
+print(f"Largest L1 readout error across modes: {largest_l1:.3e}.")
 """
     ),
     md(
@@ -575,13 +645,6 @@ noisy_counts = noisy_backend.run(aer_circuit, shots=shots).result().get_counts()
 ideal_distribution = parse_aer_counts(ideal_counts)
 noisy_distribution = parse_aer_counts(noisy_counts)
 
-print("Measured Aer circuit resource summary")
-display(pd.DataFrame([resource_summary(aer_circuit)]).drop(columns=["ops"]))
-print("Ideal Aer shot distribution")
-display(ideal_distribution)
-print("Noisy Aer shot distribution")
-display(noisy_distribution)
-
 success_rows = pd.DataFrame(
     [
         {
@@ -594,8 +657,78 @@ success_rows = pd.DataFrame(
         },
     ]
 )
-print("Readout success probability from Aer shot simulations")
-display(success_rows)
+
+aer_summary = resource_summary(aer_circuit)
+print(
+    "Measured Aer circuit: "
+    f"{aer_summary['qubits']} qubits, depth {aer_summary['depth']}, "
+    f"size {aer_summary['size']}."
+)
+
+plot_distributions = pd.concat(
+    [
+        ideal_distribution.assign(simulation="ideal"),
+        noisy_distribution.assign(simulation="noisy"),
+    ],
+    ignore_index=True,
+)
+plot_distributions["outcome"] = (
+    "|" + plot_distributions["address"] + "> -> bus " + plot_distributions["bus"]
+)
+outcome_order = sorted(plot_distributions["outcome"].unique())
+distribution_by_sim = {
+    simulation: (
+        plot_distributions[plot_distributions["simulation"] == simulation]
+        .set_index("outcome")
+        .reindex(outcome_order)
+        .fillna({"shots": 0, "probability": 0.0})
+    )
+    for simulation in ["ideal", "noisy"]
+}
+
+fig, axes = plt.subplots(1, 2, figsize=(13, 4.2), constrained_layout=True)
+x = np.arange(len(outcome_order))
+width = 0.38
+axes[0].bar(
+    x - width / 2,
+    distribution_by_sim["ideal"]["probability"],
+    width,
+    label="ideal",
+    color="#9ECAE1",
+    edgecolor="black",
+    linewidth=0.5,
+)
+axes[0].bar(
+    x + width / 2,
+    distribution_by_sim["noisy"]["probability"],
+    width,
+    label="noisy",
+    color="#FB6A4A",
+    edgecolor="black",
+    linewidth=0.5,
+)
+axes[0].set_xticks(x)
+axes[0].set_xticklabels(outcome_order, rotation=35, ha="right")
+axes[0].set_ylabel("shot probability")
+axes[0].set_title("Aer readout distribution")
+axes[0].legend(frameon=False)
+axes[0].grid(True, axis="y", alpha=0.3)
+
+axes[1].bar(
+    success_rows["simulation"].str.replace("Aer ", "").str.replace(" shots", ""),
+    success_rows["success_probability"],
+    color=["#4E79A7", "#E15759"],
+    edgecolor="black",
+    linewidth=0.6,
+)
+axes[1].set_ylim(0, 1.05)
+axes[1].set_ylabel("success probability")
+axes[1].set_title("Readout success under tutorial noise")
+axes[1].grid(True, axis="y", alpha=0.3)
+plt.show()
+
+for _, row in success_rows.iterrows():
+    print(f"{row['simulation']}: success probability {row['success_probability']:.3f}")
 """
     ),
     md(
@@ -627,40 +760,71 @@ counts_data = pd.read_csv(depth_dir / "counts_data.csv")
 counts_noload = pd.read_csv(depth_dir / "counts_nodedataload.csv")
 h_tree = pd.read_csv(depth_dir / "h_tree.csv")
 
-print("Data-load QRAM resource data, first seven levels")
-display(counts_data.head(7))
-print("No-data-load QRAM resource data, first seven levels")
-display(counts_noload.head(7))
-print("H-tree mapping resource data, first seven levels")
-display(h_tree.head(7))
+print(
+    "Loaded resource curves: "
+    f"{len(counts_data)} data-load levels, "
+    f"{len(counts_noload)} no-data-load levels, "
+    f"{len(h_tree)} H-tree levels."
+)
 
-fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+fig, axes = plt.subplots(2, 2, figsize=(14, 8.5), constrained_layout=True)
+axes = axes.ravel()
 
-axes[0].plot(counts_data["level"], counts_data["num_qubits"], marker="o", label="data load")
-axes[0].plot(counts_noload["level"], counts_noload["num_qubits"], marker="s", label="no data load")
+axes[0].scatter(counts_data["level"], counts_data["num_qubits"], s=70, label="data load", color="#4E79A7")
+axes[0].plot(counts_data["level"], counts_data["num_qubits"], color="#4E79A7", alpha=0.65)
+axes[0].scatter(counts_noload["level"], counts_noload["num_qubits"], s=45, marker="s", label="no data load", color="#F28E2B")
+axes[0].plot(counts_noload["level"], counts_noload["num_qubits"], color="#F28E2B", alpha=0.65)
 axes[0].set_xlabel("QRAM level")
 axes[0].set_ylabel("qubits")
-axes[0].set_title("Qubit count")
-axes[0].legend()
+axes[0].set_title("Qubit-count scaling")
+axes[0].legend(frameon=False)
 axes[0].grid(True, alpha=0.3)
 
-axes[1].plot(counts_data["level"], counts_data["cswap_depth"], marker="o", label="CSWAP/CZ depth")
-axes[1].plot(counts_data["level"], counts_data["swap_depth"], marker="s", label="SWAP depth")
+for frame, label, color in [
+    (counts_data, "data load", "#4E79A7"),
+    (counts_noload, "no data load", "#F28E2B"),
+]:
+    axes[1].plot(frame["level"], frame["cswap_depth"], marker="o", color=color, label=f"{label}: CSWAP/CZ")
+    axes[1].plot(frame["level"], frame["swap_depth"], marker="s", color=color, linestyle="--", label=f"{label}: SWAP")
 axes[1].set_xlabel("QRAM level")
 axes[1].set_ylabel("depth")
-axes[1].set_title("Depth with data load")
-axes[1].legend()
+axes[1].set_title("Depth scaling")
+axes[1].legend(fontsize=8, frameon=False)
 axes[1].grid(True, alpha=0.3)
 
-axes[2].plot(h_tree["level"], h_tree["tele_count"], marker="o", label="tele count")
-axes[2].plot(h_tree["level"], h_tree["swap_count"], marker="s", label="swap count")
+axes[2].plot(counts_data["level"], counts_data["cswap_count"], marker="o", label="data load: CSWAP/CZ", color="#4E79A7")
+axes[2].plot(counts_data["level"], counts_data["swap_count"], marker="s", label="data load: SWAP", color="#76B7B2")
+axes[2].plot(counts_noload["level"], counts_noload["cswap_count"], marker="o", linestyle="--", label="no data load: CSWAP/CZ", color="#F28E2B")
+axes[2].plot(counts_noload["level"], counts_noload["swap_count"], marker="s", linestyle="--", label="no data load: SWAP", color="#E15759")
 axes[2].set_xlabel("QRAM level")
-axes[2].set_ylabel("count")
-axes[2].set_title("H-tree mapping resources")
-axes[2].legend()
+axes[2].set_ylabel("gate count")
+axes[2].set_title("Routing-gate count scaling")
+axes[2].legend(fontsize=8, frameon=False)
 axes[2].grid(True, alpha=0.3)
 
-plt.tight_layout()
+h_scatter = axes[3].scatter(
+    h_tree["swap_count"],
+    h_tree["tele_count"],
+    c=h_tree["level"],
+    s=80 + 8 * (h_tree["tele_depth"] + h_tree["swap_depth"]),
+    cmap="viridis",
+    edgecolors="black",
+    linewidths=0.7,
+)
+for _, row in h_tree.iterrows():
+    axes[3].annotate(
+        f"L{int(row['level'])}",
+        (row["swap_count"], row["tele_count"]),
+        textcoords="offset points",
+        xytext=(5, 4),
+        fontsize=8,
+    )
+axes[3].set_xlabel("H-tree SWAP count")
+axes[3].set_ylabel("H-tree teleportation count")
+axes[3].set_title("H-tree mapping trade-off")
+axes[3].grid(True, alpha=0.3)
+fig.colorbar(h_scatter, ax=axes[3], label="QRAM level")
+
 plt.show()
 """
     ),
@@ -723,12 +887,75 @@ mitigation_summary = (
     )
 )
 
-print("Teleportation fidelity summary from processed experimental data")
-display(teleportation_summary.round(4))
-print("Processed QRAM fidelity sweep, first eight rows")
-display(processed_fidelity.head(8))
-print("Query-fidelity summary by address and selection flag")
-display(mitigation_summary.round(4))
+print(
+    "Loaded processed artifacts: "
+    f"{sum(len(teleportation_data[state]) for state in state_order)} teleportation samples, "
+    f"{len(processed_fidelity)} fidelity-sweep points, "
+    f"{len(mitigation_data)} mitigation records."
+)
+
+fig, axes = plt.subplots(1, 3, figsize=(15, 4.2), constrained_layout=True)
+
+axes[0].bar(
+    teleportation_summary["state"],
+    teleportation_summary["samples"],
+    color="#4E79A7",
+    edgecolor="black",
+    linewidth=0.6,
+)
+axes[0].set_xlabel("input state")
+axes[0].set_ylabel("samples")
+axes[0].set_title("Teleportation sample coverage")
+axes[0].grid(True, axis="y", alpha=0.3)
+
+coverage_scatter = axes[1].scatter(
+    processed_fidelity["pp"],
+    processed_fidelity["layer"],
+    c=processed_fidelity["fqram"],
+    s=75,
+    cmap="viridis",
+    edgecolors="black",
+    linewidths=0.4,
+)
+axes[1].set_xscale("log")
+axes[1].set_xlabel("physical Pauli error pp")
+axes[1].set_ylabel("QRAM layer")
+axes[1].set_title("Processed fidelity sweep coverage")
+axes[1].grid(True, which="both", alpha=0.25)
+fig.colorbar(coverage_scatter, ax=axes[1], label="F_QRAM")
+
+sample_counts = (
+    mitigation_summary.pivot(index="address", columns="select", values="samples")
+    .reindex(sorted(mitigation_summary["address"].unique()))
+)
+address_x = np.arange(len(sample_counts))
+width = 0.38
+axes[2].bar(
+    address_x - width / 2,
+    sample_counts["False"],
+    width,
+    label="raw",
+    color="#9ECAE1",
+    edgecolor="black",
+    linewidth=0.5,
+)
+axes[2].bar(
+    address_x + width / 2,
+    sample_counts["True"],
+    width,
+    label="selected",
+    color="#FB6A4A",
+    edgecolor="black",
+    linewidth=0.5,
+)
+axes[2].set_xticks(address_x)
+axes[2].set_xticklabels([f"|{address}>" for address in sample_counts.index], rotation=30)
+axes[2].set_ylabel("records")
+axes[2].set_title("Mitigation records by address")
+axes[2].legend(frameon=False)
+axes[2].grid(True, axis="y", alpha=0.3)
+
+plt.show()
 """
     ),
     md(
