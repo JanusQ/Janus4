@@ -114,10 +114,10 @@ def extract_instruction_word(line: str, *, opcode: int = CUSTOM0_OPCODE) -> int 
 def filter_trace(raw_text: str, *, opcode: int = CUSTOM0_OPCODE) -> str:
     """Keep custom0 lines, q_acquire resume markers, and the simulator $finish marker.
 
-    Mirrors the filter used by ``capture artifact generation flow`` so that
-    live simulator runs and the archive capture pipeline share a single
-    implementation. The output preserves original line ordering and always
-    ends with a trailing newline when any lines are kept.
+    Mirrors the archive capture filter so live simulator runs and checked-in
+    replay artifacts share a single implementation. The output preserves
+    original line ordering and always ends with a trailing newline when any
+    lines are kept.
 
     A RoCC ``q_acquire`` trace row is the command issue point. If the
     controller is still waiting for a queued ``q_gen``/``q_run`` to complete,

@@ -23,4 +23,4 @@ metric,qtenon_host_target_cycles,1338502
 metric,qtenon_schedule_removed_target_cycles,3356063
 metric,checksum,2821959758
 paper_vqe_spsa,done
-- chipyard-checkout/sims/verilator/generated-src/chipyard.harness.TestHarness.QChipRocketConfig/gen-collateral/TestDriver.v:158: Verilog $finish
+- simulator: Verilog $finish

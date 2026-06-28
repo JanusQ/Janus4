@@ -471,7 +471,7 @@ class EnsureSimulatorTest(unittest.TestCase):
     def test_ensure_simulator_falls_back_when_env_var_path_missing(self) -> None:
         """If ``QTENON_SIMULATOR`` is set but the file does not exist (or is
         not executable), the helper falls through to the Chipyard tree
-        walk so a misconfigured env var doesn't silently break validation environment."""
+        walk so a misconfigured env var doesn't silently mask setup issues."""
 
         with tempfile.TemporaryDirectory() as tmp_str:
             chipyard_root, simulator = self._layout_chipyard(
@@ -537,7 +537,7 @@ class RunLocalSimTest(unittest.TestCase):
     def _fake_sim_stdout(self) -> str:
         # Build one real custom0 trace line using the shared encode helper so
         # ``filter_trace`` + ``parse_trace_text`` exercise the same regexes as
-        # the archive pipeline in ``capture artifact flow``.
+        # the archive pipeline.
         q_set_word = pack_q_set(rs1=10, rs2=11)
         q_acquire_word = pack_q_acquire(rs1=12)
         return (

@@ -32,7 +32,6 @@ class TutorialPathsTest(unittest.TestCase):
             paths = TutorialPaths.discover(Path(__file__))
         self.assertIsInstance(paths.chipyard_root, Path)
         self.assertEqual(paths.config_name, "QChipRocketConfig")
-        # Default points inside chipyard checkout
         self.assertEqual(paths.chipyard_root.name, "chipyard")
 
     def test_chipyard_root_env_override(self) -> None:

@@ -17,12 +17,12 @@ Open the printed `http://localhost:8888/lab` URL and run the
 `qtenon_tutorial.ipynb` notebook end-to-end. Cells [3] / [14] cross-compile
 and run the Verilator simulator live inside the container — no local
 Python / Jupyter / RISC-V / Verilator setup needed. See
-[`docs/DOCKER.md`](docs/DOCKER.md) for the Apple Silicon note and the
-contributor rebuild flow.
+[`docs/DOCKER.md`](docs/DOCKER.md) for the Apple Silicon note and image
+contents.
 
 For contributors editing helpers or hardware sources, see
-[`docs/SETUP.md`](docs/SETUP.md) for the local-venv path and the validation environment
-contributor flow.
+[`docs/SETUP.md`](docs/SETUP.md) for the local-venv path and optional live
+simulation prerequisites.
 
 ---
 
@@ -30,13 +30,13 @@ contributor flow.
 
 - **Default tutorial path**: local replay from checked-in artifacts under
   `tutorial/`, especially captures, metadata, and figures. This is the
-  path tutorial readers should use; it must not require validation environment access.
-- **Contributor path**: validation environment remains the execution target for refreshing capture
-  artifacts and validating hardware-side changes.
-- **Current transition status**: the repo is being migrated from an older
-  validation environment-coupled notebook flow to the replay-only local path. Until
-  `04-21-qtenon-demo-rewrite` lands, some helpers or generated notebook cells
-  may still contain legacy validation environment execution code.
+  path tutorial readers should use; it does not require Chipyard, Verilator,
+  or a RISC-V toolchain on the host machine.
+- **Contributor path**: local Python tooling can validate notebook helpers and
+  replay artifacts without a hardware build environment.
+- **Advanced live path**: users with a compatible Chipyard/Verilator setup can
+  opt into live simulator runs through environment variables documented in the
+  notebook.
 
 ---
 
@@ -45,7 +45,7 @@ contributor flow.
 ```text
 code/
 ├── hw/
-│   └── qc/                    # Scala HW source (mirrored to validation environment)
+│   └── qc/                    # Scala HW source for the RoCC accelerator
 │       └── src/main/scala/
 │           ├── qc/
 │           │   ├── ISA.scala
@@ -70,7 +70,8 @@ code/
 │   ├── captures/
 │   │   └── hybrid_loop/
 │   ├── scripts/
-│   │   └── capture artifact flow
+│   │   ├── build_smoke_cache.sh
+│   │   └── smoke_docker.sh
 │   ├── tests/
 │   │   ├── test_common.py
 │   │   ├── test_encode.py
@@ -78,46 +79,27 @@ code/
 │   ├── build_notebook.py
 │   ├── validate_notebook.py
 │   └── qtenon_tutorial.ipynb
-├── tools/
-│   ├── source synchronization flow
-│   └── environment setup
 └── docs/
+    ├── DOCKER.md
     └── SETUP.md
 ```
 
-## Contributor Relationship to validation environment
-
-- **Source of truth**: this repo
-- **Contributor execution site**: validation environment at `chipyard checkout/`
-- **Sync direction**: this repo → validation environment via `tools/source synchronization flow`
-- **Chipyard tree on validation environment**: our files overwrite only:
-  - `generators/qc/src/main/scala/qc/*.scala`
-  - `generators/chipyard/src/main/scala/config/RoCCAcceleratorConfigs.scala`
-  - `tests/hybrid_loop_demo.c`
-  - `tests/rocc.h`
-  - `environment setup`
-
 ## Edit Workflow
 
-For hardware and capture contributors, develop locally on macOS, commit in this
-repo, sync to validation environment, then run the simulator on validation environment:
+For tutorial helper changes, develop locally and run the helper test suite:
 
 ```bash
-./tools/source synchronization flow
-validation environment 'cd chipyard checkout && source environment setup && make ...'
+PYTHONPATH=. python -m unittest discover -s tutorial/tests -t .
 ```
 
-To refresh the checked-in tutorial replay artifacts, run
-`./capture artifact generation flow` from this local repo.
-
-For tutorial readers, the intended steady-state path is local notebook
-execution against committed artifacts. validation environment should not be required just to run
-the tutorial.
+For hardware or live-simulator changes, use a compatible Chipyard checkout and
+set `QTENON_CHIPYARD_ROOT` / `QTENON_CONFIG_NAME` as needed. The public
+tutorial path remains replay-based and runs from committed artifacts.
 
 ## Build / Run
 
-See [`docs/SETUP.md`](docs/SETUP.md) for the local quickstart and the separate
-contributor-only validation environment flow.
+See [`docs/SETUP.md`](docs/SETUP.md) for the local contributor setup and
+[`docs/DOCKER.md`](docs/DOCKER.md) for the attendee Docker path.
 
 ---
 

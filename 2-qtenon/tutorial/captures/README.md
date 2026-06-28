@@ -1,7 +1,7 @@
 # Tutorial Captures
 
-These files are contributor-generated replay artifacts for the Qtenon tutorial.
-They are not part of the attendee setup path.
+These files are checked-in replay artifacts for the Qtenon tutorial. They keep
+the notebook runnable without requiring a local hardware-simulation setup.
 
 ## What Lives Here
 
@@ -19,36 +19,9 @@ Each capture directory contains:
 - `<name>.trace.txt`
 - `<name>.log`
 
-The `hybrid_loop` trace is filtered from the raw `spike-dasm` `.out` produced
-by `make run-binary` on validation environment. The `paper_vqe_spsa` capture intentionally keeps
-only a trace placeholder; its notebook section reads the UART metric log.
+The `hybrid_loop` trace is filtered from a simulator retire trace. The
+`paper_vqe_spsa` capture intentionally keeps only a trace placeholder; its
+notebook section reads the UART metric log.
 
-## Refresh Flow
-
-Run the contributor-only refresh script from the local `code/` repo:
-
-```bash
-cd code
-./capture artifact generation flow
-```
-
-Requirements:
-
-- working `validation environment`
-- `tools/source synchronization flow` succeeds
-- validation environment Chipyard tree at `chipyard checkout`
-- QChipRocketConfig buildable on validation environment
-- known-good Verilator at `/path/to/toolchain-env/bin/verilator`
-
-Useful overrides:
-
-```bash
-QTENON_validation environment_HOST=validation environment \
-QTENON_validation environment_CHIPYARD_ROOT=chipyard checkout \
-QTENON_CONFIG_NAME=QChipRocketConfig \
-QTENON_REBUILD_SIM=1 \
-./capture artifact generation flow
-```
-
-If the host resolves an old system Verilator, keep the default
-`QTENON_VERILATOR` override or point it at another `--main`-capable binary.
+Regenerating these files requires a compatible Chipyard/Verilator environment
+and should be done before updating this directory in the public tutorial tree.

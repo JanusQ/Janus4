@@ -83,7 +83,7 @@ loads the separate `paper_vqe_spsa` capture. This keeps the notebook runnable
 from the checked-in artifacts alone; the replay path does not require a local
 RISC-V toolchain, Chipyard checkout, or Verilator build.
 
-Contributors can opt into live simulation:
+Users with a compatible simulator environment can opt into live simulation:
 
 | Environment flag | What reruns |
 | --- | --- |

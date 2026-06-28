@@ -81,15 +81,14 @@ def compile_elf(
 ) -> "CompileResult":
     """Compile ``src`` into a statically linked RISC-V ELF suitable for the local simulator.
 
-    Assembles the chipyard test flag set used by ``capture artifact flow``'s
-    remote make (``-std=gnu99 -O2 -fno-common -fno-builtin-printf -Wall
+    Assembles the chipyard test flag set used by the tutorial simulator flow
+    (``-std=gnu99 -O2 -fno-common -fno-builtin-printf -Wall
     -march=rv64imafdc -mabi=lp64d -static -specs=htif_nano.specs``) and
     writes a raw objdump next to the ELF as ``<elf_out>.objdump.txt``.
     ``htif_nano.specs`` ships with conda ``riscv-tools`` and supplies the
     crt and linker script, so no hand-written linker input is required.
-    The objdump is left un-annotated here; ``capture artifact flow`` owns
-    the ``annotate_objdump`` step, and cell 14's live path does not
-    depend on the `# q_*` comment decoration.
+    The objdump is left un-annotated here; cell 14's live path does not depend
+    on the `# q_*` comment decoration.
 
     ``extra_args`` is appended verbatim to the gcc invocation so callers
     can inject defines (e.g. ``["-DFOO=1"]``) without subclassing.
@@ -165,10 +164,10 @@ def compile_elf(
 def ensure_simulator(chipyard_root: Path, config_name: str) -> Path:
     """Idempotently build the chipyard verilator simulator binary and return its path.
 
-    Mirrors the ``make -C ${REMOTE_SIM_DIR} CONFIG=${CONFIG_NAME}`` shape
-    from ``capture artifact flow``. The caller is expected to have already
-    sourced ``environment setup`` (or equivalent) so that ``verilator`` and
-    the RISC-V toolchain are discoverable from ``PATH``.
+    Mirrors the standard Chipyard Verilator build shape:
+    ``make -C <chipyard>/sims/verilator CONFIG=<config>``. The caller is
+    expected to have already configured ``PATH`` so that ``verilator`` and
+    the RISC-V toolchain are discoverable.
 
     Failure taxonomy:
     - chipyard tree missing, or ``make`` / ``riscv64-unknown-elf-gcc`` off
@@ -181,7 +180,7 @@ def ensure_simulator(chipyard_root: Path, config_name: str) -> Path:
     build step — the bundled Docker image (Phase 3) points this at
     ``/usr/local/bin/qtenon-sim``. Unset, or pointing at a non-existent /
     non-executable path → fall through to the current Chipyard-build
-    behavior so existing validation environment / venv flows are unaffected.
+    behavior so existing local venv flows are unaffected.
     """
 
     env_simulator = os.environ.get("QTENON_SIMULATOR")
@@ -296,10 +295,10 @@ def run_local_sim(
 
     Two execution modes are supported:
 
-    * **Make mode** (default validation environment contributor flow): delegates to
+    * **Make mode**: delegates to
       chipyard's ``sims/verilator/Makefile`` (target ``run-binary`` by
       default, or ``run-binary-fast`` when ``fast=True``) so
-      the invocation matches what ``capture artifact flow`` does remotely:
+      the invocation matches the standard Chipyard run flow:
       correct ``+permissive / +dramsim / +max-cycles / +verbose`` flags,
       stderr piped through ``spike-dasm`` into ``{elf.stem}.out``, stdout
       ``tee``'d into ``{elf.stem}.log``. Those two chipyard-produced

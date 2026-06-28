@@ -31,7 +31,7 @@ class TutorialPaths:
         ``chipyard_root`` and ``config_name`` are read from the environment
         (``QTENON_CHIPYARD_ROOT`` / ``QTENON_CONFIG_NAME``) so the notebook
         can target different chipyard checkouts without code edits.
-        Defaults mirror the validation environment smoke layout
+        Defaults mirror a conventional Chipyard checkout location
         (``chipyard checkout`` / ``QChipRocketConfig``).
         The laptop fallback path does not require ``chipyard_root`` to
         exist on disk — ``ensure_simulator`` raises ``ToolchainMissing``
@@ -50,7 +50,7 @@ class TutorialPaths:
         chipyard_root = Path(
             os.environ.get(
                 "QTENON_CHIPYARD_ROOT",
-                str(Path.home() / "firesim" / "target-design" / "chipyard"),
+                str(Path.home() / "chipyard"),
             )
         ).expanduser()
         config_name = os.environ.get("QTENON_CONFIG_NAME", "QChipRocketConfig")

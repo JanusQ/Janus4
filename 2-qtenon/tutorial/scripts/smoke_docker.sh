@@ -23,7 +23,7 @@ fi
 if [[ ! -f "${REPO_ROOT}/build/qtenon-toolchain-amd64.tar.gz" ]] \
    || [[ ! -f "${REPO_ROOT}/build/qtenon-sim-libs-amd64.tar.gz" ]] \
    || [[ ! -f "${REPO_ROOT}/build/simulator-chipyard.harness-QChipRocketConfig" ]]; then
-  echo "[smoke] ERROR: build/ artefacts missing — see code/docs/DOCKER.md contributor flow" >&2
+  echo "[smoke] ERROR: build/ artefacts missing — see code/docs/DOCKER.md image rebuild flow" >&2
   exit 2
 fi
 

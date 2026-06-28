@@ -3,15 +3,15 @@
 > **Attendees: skip this file.** The recommended path is the Docker image —
 > see [`DOCKER.md`](DOCKER.md) for the one-line `docker pull` + `docker run`
 > snippet. This file is for contributors editing helpers, hardware sources,
-> or capture regeneration.
+> or local simulator integration.
 
 ## Modes
 
 - **Default attendee mode**: Docker image — see [`DOCKER.md`](DOCKER.md).
 - **Contributor mode**: local Python venv against committed notebook
-  artifacts, captures, and figures. No validation environment access required.
-- **Contributor mode**: validation environment-backed capture regeneration and hardware
-  validation.
+  artifacts, captures, and figures.
+- **Advanced live-simulation mode**: optional Chipyard/Verilator execution for
+  users with a compatible local or remote hardware-simulation environment.
 
 ## Docker (recommended)
 
@@ -24,12 +24,12 @@ Opens JupyterLab on `http://localhost:8888/lab` with the tutorial notebook
 ready to run end-to-end (cells [3] / [14] cross-compile and run the
 Verilator simulator live inside the container). On Apple Silicon, prepend
 `--platform linux/amd64`. See [`DOCKER.md`](DOCKER.md) for the full
-attendee guide and the contributor rebuild flow.
+attendee guide and image details.
 
 ## Local Python Environment
 
 > Use this path only if you need to edit helpers in `tutorial/helpers/`,
-> hardware sources in `hw/`, or rebuild capture artefacts from validation environment.
+> hardware sources in `hw/`, or validate notebook artifacts locally.
 > Attendees should use Docker (see above).
 
 Create and use the repo-local virtual environment:
@@ -65,46 +65,22 @@ The tutorial's default user workflow is replay-only:
 
 This path must not require:
 
-- validation environment access
 - a local RISC-V toolchain
 - a local Verilator / Chipyard environment
 
-## Contributor: validation environment Environment Script
+## Optional Live Simulation
 
-The source of truth for the remote bootstrap lives at [`tools/environment setup`](../tools/environment setup).
-
-Sync it to validation environment with:
-
-```bash
-./tools/source synchronization flow
-```
-
-Then on validation environment:
+If you have a compatible Chipyard checkout and Verilator simulator, point the
+notebook helpers at that environment:
 
 ```bash
-cd chipyard checkout
-source environment setup
+export QTENON_CHIPYARD_ROOT=chipyard-checkout
+export QTENON_CONFIG_NAME=QChipRocketConfig
+export QTENON_RUN_LIVE_SIM=1
 ```
 
-## Contributor: Sync Local Sources To validation environment
-
-```bash
-cd code
-./tools/source synchronization flow
-```
-
-Useful variants:
-
-```bash
-./tools/source synchronization flow --dry-run
-./tools/source synchronization flow --host validation environment --root chipyard checkout
-```
-
-Contributors refreshing replay artifacts should then run:
-
-```bash
-./capture artifact generation flow
-```
+The Docker image already carries the tutorial's supported live path, so most
+users do not need this setup.
 
 ## Run Helper Tests
 

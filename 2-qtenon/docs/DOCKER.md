@@ -26,7 +26,8 @@ the C source and re-running the cells reflects real retire-cycle deltas.
 ## Apple Silicon note
 
 The image is `linux/amd64` only — the bundled Verilator simulator is the
-x86_64 binary built on the validation environment host, with no upstream arm64 build available.
+x86_64 binary used by the published tutorial image, with no upstream arm64
+build available for this tag.
 On Apple Silicon (M-series) Macs, Docker Desktop runs the image under Rosetta:
 
 ```bash
@@ -57,9 +58,8 @@ in under a second; only the Verilator step is dominated by emulation cost.
 
 ## What's NOT in the image
 
-- Chipyard, FIRRTL, sbt, JVM — the contributor-only chain that **builds** the
-  simulator. To rebuild the simulator, see the validation environment flow in
-  [`SETUP.md`](SETUP.md) (contributor section).
+- Chipyard, FIRRTL, sbt, JVM — the toolchain that **builds** the simulator.
+  The image ships the prebuilt simulator needed for the tutorial path.
 - spike-dasm — the trace filter on the Python side selects raw `custom0`
   lines and discards disassembly tokens, so we skip the dasm step entirely.
 - The `build/` staging directory used during image construction (vendored
@@ -67,26 +67,25 @@ in under a second; only the Verilator step is dominated by emulation cost.
   shipped in the image either; only the extracted artefacts under `/opt/`
   and `/usr/local/bin/` are present.
 
-## Contributor rebuild flow
+## Image rebuild flow
 
-The image is rebuilt from the host repo whenever the Verilator simulator,
-the toolchain tarball, or the tutorial code changes. Steps:
+The image is rebuilt whenever the Verilator simulator, the toolchain tarball,
+or the tutorial code changes. The expected staging inputs are:
 
-1. **Stage the simulator** — on validation environment, build
-   `simulator-chipyard.harness-QChipRocketConfig`, then copy it to the host's
-   `build/` directory:
-   ```bash
-   copy validation environment artifact from chipyard checkout/sims/verilator/simulator-chipyard.harness-QChipRocketConfig \
-       build/
-   chmod +x build/simulator-chipyard.harness-QChipRocketConfig
-   ```
-2. **Stage the toolchain tarball** — once per toolchain refresh; produced
-   from validation environment's `toolchain checkout/.toolchain environment/{lib/lib{mpc,mpfr,gmp,z}.so*, riscv-tools/...}`
-   with `tar --transform "s,^,qtenon-toolchain/,"` so the archive root is
-   `qtenon-toolchain/`. Drop the resulting tarball at
+- `build/simulator-chipyard.harness-QChipRocketConfig`
+- `build/qtenon-toolchain-amd64.tar.gz`
+- `build/qtenon-sim-libs-amd64.tar.gz`
+
+Steps:
+
+1. **Stage the simulator** at
+   `build/simulator-chipyard.harness-QChipRocketConfig` and mark it
+   executable.
+2. **Stage the toolchain tarball** with archive root `qtenon-toolchain/`.
+   Drop the resulting tarball at
    `build/qtenon-toolchain-amd64.tar.gz`.
-3. **Stage the simulator's chipyard-built libs** — `libriscv.so` and
-   `libdramsim.so`, stripped on validation environment (`strip --strip-unneeded`), packed as
+3. **Stage the simulator libraries** — `libriscv.so` and `libdramsim.so`,
+   stripped and packed as
    `build/qtenon-sim-libs-amd64.tar.gz`.
 4. **Build** from repo root:
    ```bash

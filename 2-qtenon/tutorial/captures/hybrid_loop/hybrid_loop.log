@@ -5,4 +5,4 @@ iter,theta0_idx,theta1_idx,sample_bits,objective_ppm,acquire_word
 1,19,38,01,1609,4634210927169110035
 2,19,55,01,1987,4652226949177344019
 3,38,55,11,2745,4679251802526777382
-- chipyard-checkout/sims/verilator/generated-src/chipyard.harness.TestHarness.QChipRocketConfig/gen-collateral/TestDriver.v:158: Verilog $finish
+- simulator: Verilog $finish
