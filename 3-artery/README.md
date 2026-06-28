@@ -5,7 +5,7 @@ Topic 3 of the Janus 4.0 tutorial provides an ARTERY-style low-latency quantum f
 ## Layout
 
 - `tutorial/3_1_artery_feedback_tutorial.ipynb` is the attendee-facing notebook.
-- `tutorial/s21_data.mat.gz` contains the compressed S21 readout dataset used by the notebook.
+- `tutorial/readout_data.mat.gz` contains the compressed readout dataset used by the notebook.
 - `tutorial/original_notebook/` contains result figures exported from the original software feedback analysis notebook.
 - `software/` contains the Python analysis package, examples, and API server.
 - `hw/interface/` contains the packet format, datapath description, and Verilog interface boundary, not the full Vivado project.
@@ -22,7 +22,7 @@ docker run --rm --platform linux/amd64 -p 127.0.0.1:8888:8888 janusq/janus4:isca
 
 Then open `3-artery/tutorial/3_1_artery_feedback_tutorial.ipynb`
 and select the `ARTERY` kernel. The notebook automatically extracts
-`tutorial/s21_data.mat.gz` to a temporary directory before loading the S21 data.
+`tutorial/readout_data.mat.gz` to a temporary directory before loading the readout data.
 
 For a quick import and notebook execution check:
 
